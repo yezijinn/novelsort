@@ -24,6 +24,11 @@ namespace {
 
 constexpr std::string_view kAttempts = "已尝试 BOM / UTF-8 / GB18030";
 
+// GB18030 的 Windows 代码页号。
+constexpr UINT kGb18030CodePage = 54936;
+// 输出缓冲余量：末尾可能多出半行，避免每次追加都扩容。
+constexpr std::size_t kReserveSlackBytes = 16;
+
 constexpr std::string_view kReplacement = "\xEF\xBF\xBD";
 
 // 容错阈值：最多允许 0.001% 的坏字节（至少 1 个）。
@@ -38,7 +43,7 @@ bool utf8_to_utf8_lossy(std::string_view bytes, std::size_t limit,
                         std::string& out, std::size_t& replacements) {
   out.clear();
   replacements = 0;
-  out.reserve(bytes.size() + bytes.size() / 16 + 16);
+  out.reserve(bytes.size() + bytes.size() / 16 + kReserveSlackBytes);
   std::size_t i = 0;
   while (i < bytes.size()) {
     const auto c = static_cast<unsigned char>(bytes[i]);
@@ -182,7 +187,7 @@ bool gb18030_to_utf8_lossy(std::string_view bytes, std::size_t limit,
                            std::string& out, std::size_t& replacements) {
   out.clear();
   replacements = 0;
-  out.reserve(bytes.size() + bytes.size() / 2 + 16);
+  out.reserve(bytes.size() + bytes.size() / 2 + kReserveSlackBytes);
   std::size_t segment_start = 0;
   std::size_t i = 0;
   while (i < bytes.size()) {
@@ -239,7 +244,7 @@ bool gb18030_to_utf8(std::string_view bytes, std::string& out, bool strict,
     if (end == pos) break;
     const auto chunk = static_cast<int>(end - pos);
     const int wide_len =
-        MultiByteToWideChar(54936, flags, bytes.data() + pos, chunk,
+        MultiByteToWideChar(kGb18030CodePage, flags, bytes.data() + pos, chunk,
                             wide.data(), static_cast<int>(wide.size()));
     if (wide_len <= 0 ||
         static_cast<std::size_t>(wide_len) > wide.size()) {

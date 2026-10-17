@@ -205,9 +205,9 @@ int run(const std::vector<std::string>& args) {
     std::vector<std::string> all_warnings = loaded.warnings;
     all_warnings.insert(all_warnings.end(), parsed.warnings.begin(),
                         parsed.warnings.end());
-    const std::string json =
-        novel::directory_json(options.input, loaded.encoding, ordered,
-                              parsed.toc_lines, all_warnings);
+    const std::string json = novel::directory_json(
+        novel::DirectoryJsonInput{options.input, loaded.encoding, &ordered,
+                                  &parsed.toc_lines, &all_warnings});
     if (!write_text_file(options.json_path, json)) {
       print_error("无法写入 JSON：" + options.json_path);
       return kExitFile;

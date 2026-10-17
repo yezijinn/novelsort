@@ -320,16 +320,16 @@ std::string render_txt(const std::string& original_utf8,
   return out;
 }
 
-std::string directory_json(const std::string& source,
-                           const std::string& encoding,
-                           const std::vector<Chapter>& chapters,
-                           const std::vector<std::size_t>& toc_lines,
-                           const std::vector<std::string>& warnings) {
+std::string directory_json(const DirectoryJsonInput& input) {
+  const std::vector<Chapter>& chapters = *input.chapters;
+  const std::vector<std::size_t>& toc_lines = *input.toc_lines;
+  const std::vector<std::string>& warnings = *input.warnings;
+
   std::string out;
   out += "{\"version\":1,\"source\":";
-  append_json_string(out, source);
+  append_json_string(out, input.source);
   out += ",\"encoding\":";
-  append_json_string(out, encoding);
+  append_json_string(out, input.encoding);
   out += ",\"chapters\":[";
   for (std::size_t i = 0; i < chapters.size(); ++i) {
     if (i != 0) out.push_back(',');

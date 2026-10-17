@@ -15,6 +15,12 @@
 namespace novel {
 namespace {
 
+// 解析/格式化共用的数值上限。
+constexpr long long kMaxChapterNumber = 1000000;  // 序号超过它不再当章节号
+constexpr std::size_t kMaxNumberDigits = 6;       // 阿拉伯序号最大位数
+constexpr std::size_t kMaxRomanChars = 8;         // 罗马数字最大字符数
+constexpr int kMaxRomanValue = 3999;              // 罗马数字可表示的最大值
+
 // 输入标题可能带 Markdown 井号：井号只保留在 heading_line，不进 title。
 std::string strip_heading_marks(std::string_view text) {
   std::size_t i = 0;
@@ -121,7 +127,7 @@ bool parse_number_token(const std::vector<char32_t>& token, long long& value) {
     long long v = 0;
     for (const char32_t cp : token) {
       v = v * 10 + digit_of(cp);
-      if (v > 1000000) return false;
+      if (v > kMaxChapterNumber) return false;
     }
     value = v;
     return true;
@@ -286,7 +292,7 @@ long long roman_value(std::string_view s) {
 }
 
 std::string to_roman(long long n, bool upper) {
-  if (n <= 0 || n > 3999) return std::to_string(n);
+  if (n <= 0 || n > kMaxRomanValue) return std::to_string(n);
   static const std::pair<int, const char*> kTable[] = {
       {1000, "M"}, {900, "CM"}, {500, "D"},  {400, "CD"}, {100, "C"},
       {90, "XC"},  {50, "L"},   {40, "XL"},  {10, "X"},   {9, "IX"},
@@ -340,7 +346,7 @@ bool decode_digits(std::string_view text, long long& value, NumberStyle& style,
       char32_t cp = 0;
       const std::size_t len = decode_cp(text, i, cp);
       v = v * 10 + digit_of(cp);
-      if (v > 1000000) return false;
+      if (v > kMaxChapterNumber) return false;
       i += len;
     }
     value = v;
@@ -529,7 +535,7 @@ bool parse_number_parts(std::string_view number, NumberParts& parts) {
     std::size_t i = 0;
     std::size_t digits = 0;
     while (i < number.size() && number[i] >= '0' && number[i] <= '9' &&
-           digits < 6) {
+           digits < kMaxNumberDigits) {
       ++i;
       ++digits;
     }
@@ -549,7 +555,7 @@ bool parse_number_parts(std::string_view number, NumberParts& parts) {
   // 5) 罗马数字 I. / IV、
   {
     std::size_t j = 0;
-    while (j < number.size() && is_roman_char(number[j]) && j < 8) ++j;
+    while (j < number.size() && is_roman_char(number[j]) && j < kMaxRomanChars) ++j;
     if (j > 0) {
       const std::size_t marker = plain_marker_len(number, j);
       if (marker > 0) {

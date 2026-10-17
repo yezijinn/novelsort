@@ -2693,9 +2693,11 @@ bool MainWindow::exportContent(bool json) {
   ScopedWaitCursor wait;
 
   const std::string content =
-      json ? novel::directory_json(toUtf8(currentFile_), loadedEncoding_,
-                                  chapterModel_->chapters(), tocLines_,
-                                  warnings_)
+      json ? novel::directory_json(
+                 novel::DirectoryJsonInput{toUtf8(currentFile_),
+                                           loadedEncoding_,
+                                           &chapterModel_->chapters(),
+                                           &tocLines_, &warnings_})
            : novel::render_txt(loadedText_, chapterModel_->chapters(),
                               tocLines_, excludedRanges_, textExclusions_);
 
@@ -3184,8 +3186,10 @@ int MainWindow::runSelfTest(const std::filesystem::path& path,
     check("导出 TXT", fo.good(),
           "path=" + txtOut + " size=" + std::to_string(txt.size()));
   }
-  const std::string js = novel::directory_json(toUtf8(path), loadedEncoding_,
-                                               chs, tocLines_, warnings_);
+  const std::string js =
+      novel::directory_json(novel::DirectoryJsonInput{toUtf8(path),
+                                                      loadedEncoding_, &chs,
+                                                      &tocLines_, &warnings_});
   {
     std::ofstream fo(jsonOut, std::ios::binary);
     fo << js;

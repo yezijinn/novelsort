@@ -1,4 +1,4 @@
-﻿#include "core/ChapterParser.hpp"
+#include "core/ChapterParser.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -17,6 +17,15 @@ namespace novel {
 namespace {
 
 constexpr char32_t kFullWidthSpace = 0x3000;
+
+// 正文判定：标题后剩余文本超过这个码点数就当正文句子。
+constexpr std::size_t kProseCpThreshold = 8;
+// 标题字节上界：4 字节/码点，再加装饰符与分隔符的余量。
+constexpr std::size_t kTitleByteSlack = 64;
+// 数字记号最大位数，超过就不是章节号。
+constexpr std::size_t kMaxNumberDigits = 6;
+// 罗马数字最大字符数。
+constexpr std::size_t kMaxRomanChars = 8;
 
 bool is_ws_cp(char32_t cp) {
   return cp == U' ' || cp == U'\t' || cp == kFullWidthSpace;
@@ -246,7 +255,7 @@ bool rest_looks_like_sentence(std::string_view rest, bool check_length) {
   if (is_sentence_end(last_cp(rest))) return true;
   if (rest.find("\xEF\xBC\x8C") != std::string_view::npos) return true;  // ，
   if (rest.find(',') != std::string_view::npos) return true;
-  if (check_length && !wrapped_in_quotes(rest) && cp_count(rest) > 8) {
+  if (check_length && !wrapped_in_quotes(rest) && cp_count(rest) > kProseCpThreshold) {
     return true;
   }
   return false;
@@ -520,13 +529,13 @@ std::size_t consume_number_token(const std::string& s, std::size_t pos) {
     i += len;
     ++count;
   }
-  if (count > 0 && count <= 6) return i - pos;
+  if (count > 0 && count <= kMaxNumberDigits) return i - pos;
 
   // 全角罗马数字。
   {
     std::size_t j = pos;
     std::size_t rl = 0;
-    while (j < s.size() && rl < 8) {
+    while (j < s.size() && rl < kMaxRomanChars) {
       char32_t cp = 0;
       const std::size_t len = decode_cp(s, j, cp);
       if (!((cp >= 0x2160 && cp <= 0x2169) ||
@@ -542,7 +551,7 @@ std::size_t consume_number_token(const std::string& s, std::size_t pos) {
   // 半角罗马数字。
   {
     std::size_t j = pos;
-    while (j < s.size() && is_roman_letter(s[j]) && j - pos < 8) ++j;
+    while (j < s.size() && is_roman_letter(s[j]) && j - pos < kMaxRomanChars) ++j;
     if (j > pos && (j >= s.size() || !std::isalpha(
                                         static_cast<unsigned char>(s[j])))) {
       return j - pos;
@@ -636,7 +645,7 @@ Match match_bracket(const std::string& core) {
 Match match_plain_number(const std::string& core) {
   std::size_t i = 0;
   std::size_t digits = 0;
-  while (i < core.size() && core[i] >= '0' && core[i] <= '9' && digits < 6) {
+  while (i < core.size() && core[i] >= '0' && core[i] <= '9' && digits < kMaxNumberDigits) {
     ++i;
     ++digits;
   }
@@ -660,7 +669,7 @@ Match match_plain_number(const std::string& core) {
     std::size_t rl = 0;
     char32_t cp = 0;
     if (first_cp(core) >= 0x2160 && first_cp(core) <= 0x2179) {
-      while (j < core.size() && rl < 8) {
+      while (j < core.size() && rl < kMaxRomanChars) {
         const std::size_t len = decode_cp(core, j, cp);
         if (!((cp >= 0x2160 && cp <= 0x2169) ||
               (cp >= 0x2170 && cp <= 0x2179))) {
@@ -670,7 +679,7 @@ Match match_plain_number(const std::string& core) {
         ++rl;
       }
     } else {
-      while (j < core.size() && is_roman_letter(core[j]) && j < 8) ++j;
+      while (j < core.size() && is_roman_letter(core[j]) && j < kMaxRomanChars) ++j;
       rl = j;
     }
     if (rl > 0 && j < core.size()) {
@@ -846,7 +855,7 @@ Match match_heading(std::string_view raw, const ParseOptions& options) {
   // 预筛：正文长行直接返回，不产生任何堆分配。
   // 任何标题都受 max_title_chars 限制，4 字节/码点 + 64 是安全上界。
   const std::size_t limit =
-      4 * static_cast<std::size_t>(std::max(1, options.max_title_chars)) + 64;
+      4 * static_cast<std::size_t>(std::max(1, options.max_title_chars)) + kTitleByteSlack;
   // Markdown 是显式标题，历史上不受 max_title_chars 限制，保持原行为。
   if (trimmed_view[0] != '#' && trimmed_view.size() > limit) return {};
   // --title-lines 需要检查无编号短行，不能按首字符白名单过滤。
@@ -1257,7 +1266,7 @@ void split_heading_display(const std::string& full_title, Chapter& chapter) {
     std::size_t i = 0;
     std::size_t digits = 0;
     while (i < title.size() && title[i] >= '0' && title[i] <= '9' &&
-           digits < 6) {
+           digits < kMaxNumberDigits) {
       ++i;
       ++digits;
     }
@@ -1277,7 +1286,7 @@ void split_heading_display(const std::string& full_title, Chapter& chapter) {
     std::size_t j = 0;
     char32_t cp = 0;
     if (first_cp(title) >= 0x2160 && first_cp(title) <= 0x2179) {
-      while (j < title.size() && j < 24) {
+      while (j < title.size() && j < kMaxRomanChars * 3) {
         const std::size_t len = decode_cp(title, j, cp);
         if (!((cp >= 0x2160 && cp <= 0x2169) ||
               (cp >= 0x2170 && cp <= 0x2179))) {
@@ -1286,7 +1295,7 @@ void split_heading_display(const std::string& full_title, Chapter& chapter) {
         j += len;
       }
     } else {
-      while (j < title.size() && is_roman_letter(title[j]) && j < 8) ++j;
+      while (j < title.size() && is_roman_letter(title[j]) && j < kMaxRomanChars) ++j;
     }
     if (j > 0) {
       const std::size_t marker = plain_marker_len(title, j);

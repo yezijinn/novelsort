@@ -22,10 +22,15 @@ std::string render_txt(const std::string& original_utf8,
                        const std::vector<LineRange>& excluded_ranges = {},
                        const std::vector<TextExclusion>& text_exclusions = {});
 
-std::string directory_json(const std::string& source,
-                           const std::string& encoding,
-                           const std::vector<Chapter>& chapters,
-                           const std::vector<std::size_t>& toc_lines,
-                           const std::vector<std::string>& warnings);
+// 目录 JSON 的输入。用结构体代替连续的字符串参数，避免 source / encoding 传反。
+struct DirectoryJsonInput {
+  std::string source;
+  std::string encoding;
+  const std::vector<Chapter>* chapters = nullptr;
+  const std::vector<std::size_t>* toc_lines = nullptr;
+  const std::vector<std::string>* warnings = nullptr;
+};
+
+std::string directory_json(const DirectoryJsonInput& input);
 
 }  // namespace novel
