@@ -1578,6 +1578,53 @@ void test_columns_no_space_render() {
   CHECK_EQ(novel::render_txt(text, copied.chapters, copied.toc_lines), text);
 }
 
+void test_inserted_rename_render() {
+  g_test = "inserted_rename_render";
+  const std::string text = "第1章 甲\n\n甲一。\n\n甲二。\n";
+  auto parsed = novel::parse_chapters(text);
+  CHECK_EQ(parsed.chapters.size(), static_cast<std::size_t>(1));
+  if (parsed.chapters.size() != 1) return;
+
+  CHECK(novel::split_chapter(parsed.chapters, 0, 2, "插曲", 2));
+  CHECK_EQ(parsed.chapters.size(), static_cast<std::size_t>(2));
+  if (parsed.chapters.size() != 2) return;
+  CHECK(novel::rename_chapter(parsed.chapters[1], "新标题"));
+
+  const std::string rendered =
+      novel::render_txt(text, parsed.chapters, parsed.toc_lines);
+  CHECK(rendered.find("新标题") != std::string::npos);
+  CHECK(rendered.find("插曲") == std::string::npos);
+}
+
+void test_preface_move_body_next() {
+  g_test = "preface_move_body_next";
+  const std::string text = "前言一。\n\n前言二。\n\n第1章 甲\n\n甲一。\n";
+  auto parsed = novel::parse_chapters(text);
+  CHECK_EQ(parsed.chapters.size(), static_cast<std::size_t>(2));
+  if (parsed.chapters.size() != 2) return;
+  CHECK(parsed.chapters[0].synthetic);
+  CHECK_EQ(parsed.chapters[0].start_line, static_cast<std::size_t>(0));
+  const std::size_t preface_end = parsed.chapters[0].end_line;
+  CHECK(preface_end > 0);
+
+  CHECK(novel::move_body_to_next(parsed.chapters, 0));
+  CHECK_EQ(parsed.chapters[0].end_line, static_cast<std::size_t>(0));
+  CHECK_EQ(parsed.chapters[1].extra_body.size(), static_cast<std::size_t>(1));
+  if (!parsed.chapters[1].extra_body.empty()) {
+    CHECK_EQ(parsed.chapters[1].extra_body.front().begin,
+             static_cast<std::size_t>(0));
+    CHECK_EQ(parsed.chapters[1].extra_body.front().end, preface_end);
+  }
+
+  const std::string rendered =
+      novel::render_txt(text, parsed.chapters, parsed.toc_lines);
+  const auto after = non_empty_lines(rendered);
+  CHECK(line_index(after, "前言一。") >= 0);
+  CHECK(line_index(after, "前言二。") >= 0);
+  CHECK(line_index(after, "第1章 甲") >= 0);
+  CHECK_EQ(sorted_lines(after), sorted_lines(non_empty_lines(text)));
+}
+
 void test_columns_move_body_previous() {
   g_test = "columns_move_body_previous";
   const auto loaded = load("stage2/09_综合与回归/09-01_完整小说_标准结构.txt");
@@ -1882,6 +1929,8 @@ int main() {
       {"preface_split_optional_numbering", test_preface_split_optional_numbering},
       {"columns_no_space_render", test_columns_no_space_render},
       {"promote_unnumbered_chapter", test_promote_unnumbered_chapter},
+      {"inserted_rename_render", test_inserted_rename_render},
+      {"preface_move_body_next", test_preface_move_body_next},
       {"columns_move_body_previous", test_columns_move_body_previous},
       {"columns_move_body_next", test_columns_move_body_next},
       {"columns_extra_body", test_columns_extra_body},

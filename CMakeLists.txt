@@ -41,9 +41,6 @@ if(Qt5_FOUND)
   )
   target_link_libraries(novellines-gui PRIVATE novel_core Qt5::Widgets)
   target_include_directories(novellines-gui PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src)
-  if(MSVC)
-    target_compile_options(novellines-gui PRIVATE /utf-8 /W4)
-  endif()
   if(WIN32 AND MSVC AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/resources/novelsort.ico")
     configure_file(resources/novelsort.ico
                    "${CMAKE_CURRENT_BINARY_DIR}/novelsort.ico" COPYONLY)
@@ -57,6 +54,7 @@ if(Qt5_FOUND)
     get_filename_component(_qt_bin "${_qt_qmake}" DIRECTORY)
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt HINTS "${_qt_bin}")
     if(WINDEPLOYQT_EXECUTABLE)
+      set(NOVEL_HAS_DEPLOY_GUI TRUE)
       set(_qt_extra_dlls "")
       foreach(_dll libpng16.dll zlib.dll)
         if(EXISTS "${_qt_bin}/${_dll}")
@@ -90,3 +88,25 @@ target_compile_definitions(novel_tests PRIVATE
 )
 
 add_test(NAME novel_core_tests COMMAND novel_tests)
+
+if(Qt5_FOUND AND NOVEL_HAS_DEPLOY_GUI)
+  add_test(NAME novel_gui_deploy
+    COMMAND ${CMAKE_COMMAND} --build "${CMAKE_BINARY_DIR}"
+            --config $<CONFIG> --target deploy-gui
+  )
+  set_tests_properties(novel_gui_deploy PROPERTIES
+    FIXTURES_SETUP novel_gui_runtime
+    TIMEOUT 120
+  )
+
+  add_test(NAME novel_gui_selftest
+    COMMAND novellines-gui
+      --input "${CMAKE_CURRENT_SOURCE_DIR}/tests/data/stage2/09_综合与回归/09-01_完整小说_标准结构.txt"
+      --selftest "${CMAKE_CURRENT_BINARY_DIR}/gui_selftest"
+  )
+  set_tests_properties(novel_gui_selftest PROPERTIES
+    FIXTURES_REQUIRED novel_gui_runtime
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    TIMEOUT 120
+  )
+endif()

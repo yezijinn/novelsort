@@ -35,16 +35,12 @@ QString globalStylesheet(bool dark);
 
 // 自定义模型角色
 enum ModelRoles {
-  RoleNumber = Qt::UserRole + 1,   // 当前序号（1 基）
-  RoleLevel = Qt::UserRole + 2,    // 1=卷/部/篇 2=章/节/话
-  RoleSynthetic = Qt::UserRole + 3, // 是否为合成章
-  RoleRenamed = Qt::UserRole + 4,  // 用户改过标题
-  RoleMerged = Qt::UserRole + 5,   // 合并产生的章节（正文并入）
-  RoleInserted = Qt::UserRole + 6, // 拆分/新增插入的章节
+  RoleNumber = Qt::UserRole + 1,     // 当前序号（1 基）
+  RoleLevel = Qt::UserRole + 2,      // 1=卷/部/篇 2=章/节/话
+  RoleSynthetic = Qt::UserRole + 3,  // 是否为合成章
   RoleNumberText = Qt::UserRole + 7, // 第一列：序号文本（number；无编号为空）
   RoleTitleText = Qt::UserRole + 8,  // 第二列：标题文本（有编号=name；无编号=title）
-  RoleExcluded = Qt::UserRole + 9,   // 是否排除于编号（不参与排序）
-  RoleNumbered = Qt::UserRole + 10   // 是否被解析为可递增序号
+  RoleExcluded = Qt::UserRole + 9    // 是否排除于编号（不参与排序）
 };
 
 #ifdef _WIN32

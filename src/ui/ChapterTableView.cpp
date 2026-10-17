@@ -13,7 +13,7 @@
 namespace ui {
 
 ChapterTableView::ChapterTableView(QWidget* parent) : QTableView(parent) {
-  setDragEnabled(true);
+  setRowDragEnabled(true);
   setAcceptDrops(true);
   setDropIndicatorShown(false);  // 自绘指示线
   setDefaultDropAction(Qt::MoveAction);
@@ -25,13 +25,17 @@ ChapterTableView::ChapterTableView(QWidget* parent) : QTableView(parent) {
 
 ChapterTableView::~ChapterTableView() = default;
 
-void ChapterTableView::setDragEnabled(bool enabled) {
+void ChapterTableView::setRowDragEnabled(bool enabled) {
   dragAllowed_ = enabled;
+  QAbstractItemView::setDragEnabled(enabled);
   setDragDropMode(enabled ? DragDrop : NoDragDrop);
 }
 
 void ChapterTableView::dragEnterEvent(QDragEnterEvent* event) {
-  if (dragAllowed_ && event->mimeData()->hasFormat(QStringLiteral("application/x-qabstractitemmodeldatalist"))) {
+  const bool itemDrag =
+      event->mimeData()->hasFormat(QStringLiteral(
+          "application/x-qabstractitemmodeldatalist"));
+  if (dragAllowed_ && model() && itemDrag) {
     event->acceptProposedAction();
   } else {
     event->ignore();
@@ -39,7 +43,7 @@ void ChapterTableView::dragEnterEvent(QDragEnterEvent* event) {
 }
 
 void ChapterTableView::dragMoveEvent(QDragMoveEvent* event) {
-  if (!dragAllowed_) {
+  if (!dragAllowed_ || !model()) {
     event->ignore();
     dropRow_ = -1;
     viewport()->update();
@@ -58,7 +62,7 @@ void ChapterTableView::dragMoveEvent(QDragMoveEvent* event) {
 }
 
 void ChapterTableView::dropEvent(QDropEvent* event) {
-  if (!dragAllowed_) {
+  if (!dragAllowed_ || !model()) {
     event->ignore();
     dropRow_ = -1;
     return;
@@ -85,7 +89,10 @@ void ChapterTableView::dropEvent(QDropEvent* event) {
 
 void ChapterTableView::paintEvent(QPaintEvent* event) {
   QTableView::paintEvent(event);
-  if (dropRow_ < 0 || !dragAllowed_) return;
+  if (dropRow_ < 0 || !dragAllowed_ || !model() ||
+      model()->rowCount() <= 0) {
+    return;
+  }
   QPainter painter(viewport());
   painter.setRenderHint(QPainter::Antialiasing, true);
   int y = 0;

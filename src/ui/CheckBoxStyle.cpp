@@ -4,6 +4,7 @@
 #include <QStyleOption>
 
 #include "ui/Theme.hpp"
+#include "ui/UiMetrics.hpp"
 
 namespace ui {
 
@@ -80,9 +81,9 @@ QRect CheckBoxStyle::subElementRect(SubElement subElement,
                                     const QStyleOption* opt,
                                     const QWidget* w) const {
   if (subElement == SE_CheckBoxIndicator) {
-    // 固定 18x18 指示器，保证紧凑布局一致。
+    // 固定 20x20 指示器，保证紧凑布局一致。
     QRect r = QProxyStyle::subElementRect(subElement, opt, w);
-    const int s = 20;
+    const int s = metrics::kCheckIndicatorSize;
     r.setSize(QSize(s, s));
     return r;
   }

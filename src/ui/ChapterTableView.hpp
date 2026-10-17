@@ -17,8 +17,8 @@ class ChapterTableView : public QTableView {
   explicit ChapterTableView(QWidget* parent = nullptr);
   ~ChapterTableView() override;
 
-  // 是否允许拖拽（搜索过滤时禁用）。
-  void setDragEnabled(bool enabled);
+  // 是否允许行拖拽（搜索过滤时禁用）。避免覆盖 QAbstractItemView::setDragEnabled。
+  void setRowDragEnabled(bool enabled);
 
  signals:
   void rowDropped(int fromRow, int toRow);

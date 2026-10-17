@@ -20,12 +20,6 @@ QVariant ChapterModel::data(const QModelIndex& index, int role) const {
       return ch.level;
     case RoleSynthetic:
       return ch.synthetic;
-    case RoleRenamed:
-      return ch.renamed;
-    case RoleMerged:
-      return ch.suppressed || !ch.skip_lines.empty();
-    case RoleInserted:
-      return ch.inserted;
     case RoleNumberText:
       // 第一列：有编号显示 number，无编号（序章/番外/无标题）显示空
       return ch.numbered ? QString::fromStdString(ch.number) : QString();
@@ -35,8 +29,6 @@ QVariant ChapterModel::data(const QModelIndex& index, int role) const {
                          : QString::fromStdString(ch.title);
     case RoleExcluded:
       return ch.excluded_from_numbering;
-    case RoleNumbered:
-      return ch.numbered;
     default:
       return {};
   }

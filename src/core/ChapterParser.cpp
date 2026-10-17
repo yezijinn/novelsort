@@ -321,7 +321,7 @@ bool has_embedded_sentence_end(std::string_view s) {
     i += decode_cp(s, i, cp);
     if (!is_hard_sentence_end(cp)) continue;
 
-    // A run of hard marks (``。。``) is one boundary; the end of line is fine.
+    // 连续句末标点视为一个边界；行尾结束不构成句中句号。
     std::string_view rest = s.substr(i);
     std::size_t j = 0;
     while (j < rest.size()) {
@@ -350,15 +350,12 @@ bool wrapped_in_quotes(std::string_view s) {
   return false;
 }
 
-bool rest_looks_like_sentence(std::string_view rest, bool check_length,
-                              int max_title_chars) {
+bool rest_looks_like_sentence(std::string_view rest, bool check_length) {
   if (rest.empty()) return false;
   if (is_sentence_end(last_cp(rest))) return true;
   if (rest.find("\xEF\xBC\x8C") != std::string_view::npos) return true;  // ，
   if (rest.find(',') != std::string_view::npos) return true;
-  if (check_length && !wrapped_in_quotes(rest) &&
-      cp_count(rest) > 8) {
-    (void)max_title_chars;
+  if (check_length && !wrapped_in_quotes(rest) && cp_count(rest) > 8) {
     return true;
   }
   return false;
@@ -547,7 +544,7 @@ bool is_no_space_heading_tail(std::string_view tail) {
   return true;
 }
 
-Match match_numbered(const std::string& core, const ParseOptions& options) {
+Match match_numbered(const std::string& core) {
   const ChineseNumberedScan scan = scan_chinese_numbered(core);
   if (!scan.ok) return {};
 
@@ -557,7 +554,7 @@ Match match_numbered(const std::string& core, const ParseOptions& options) {
   if (sep == 0) {
     const std::string remainder = trim_ws(rest);
     if (!remainder.empty() &&
-        rest_looks_like_sentence(remainder, true, options.max_title_chars)) {
+        rest_looks_like_sentence(remainder, true)) {
       if (!(scan.arabic && is_no_space_heading_tail(remainder))) return {};
     }
   }
@@ -581,7 +578,8 @@ Match match_special(const std::string& core) {
     }
     const std::string_view rest(core.data() + i, core.size() - i);
     const std::size_t sep = leading_sep_len(rest);
-    if (sep == 0 && !trim_ws(rest).empty()) return {};  // 序幕拉开
+    // 特殊章名后必须跟分隔符或行尾，避免把正文行当标题。
+    if (sep == 0 && !trim_ws(rest).empty()) return {};
     return make_match(2, core, kSpecial);
   }
   return {};
@@ -677,7 +675,7 @@ std::size_t consume_number_token(const std::string& s, std::size_t pos) {
   return 0;
 }
 
-Match match_english(const std::string& core, const ParseOptions& options) {
+Match match_english(const std::string& core) {
   const std::string low = ascii_lower(core);
   struct Keyword {
     const char* text;
@@ -705,7 +703,7 @@ Match match_english(const std::string& core, const ParseOptions& options) {
     if (sep == 0) {
       const std::string remainder = trim_ws(rest);
       if (!remainder.empty() &&
-          rest_looks_like_sentence(remainder, true, options.max_title_chars)) {
+          rest_looks_like_sentence(remainder, true)) {
         return {};
       }
     }
@@ -714,7 +712,7 @@ Match match_english(const std::string& core, const ParseOptions& options) {
   return {};
 }
 
-Match match_bracket(const std::string& core, const ParseOptions& options) {
+Match match_bracket(const std::string& core) {
   const char32_t open = first_cp(core);
   if (open != U'(' && open != U'\uFF08') return {};
   const std::size_t open_len = (open == U'(') ? 1 : 3;
@@ -738,13 +736,13 @@ Match match_bracket(const std::string& core, const ParseOptions& options) {
   const std::string remainder = trim_ws(rest);
   if (remainder.empty()) return {};
   if (sep == 0 &&
-      rest_looks_like_sentence(remainder, true, options.max_title_chars)) {
+      rest_looks_like_sentence(remainder, true)) {
     return {};
   }
   return make_match(2, core, kBracket);
 }
 
-Match match_plain_number(const std::string& core, const ParseOptions& options) {
+Match match_plain_number(const std::string& core) {
   std::size_t i = 0;
   std::size_t digits = 0;
   while (i < core.size() && core[i] >= '0' && core[i] <= '9' && digits < 6) {
@@ -812,7 +810,7 @@ Match match_plain_number(const std::string& core, const ParseOptions& options) {
   const char32_t first = first_cp(remainder);
   if (first >= U'0' && first <= U'9') return {};
   if (first >= 0xFF10 && first <= 0xFF19) return {};
-  if (rest_looks_like_sentence(remainder, false, options.max_title_chars)) {
+  if (rest_looks_like_sentence(remainder, false)) {
     return {};
   }
   return make_match(2, core, kPlainNumber);
@@ -982,7 +980,7 @@ Match match_heading(std::string_view raw, const ParseOptions& options) {
           // chapter, not a volume.
           int level = 2;
           if (hashes == 1) {
-            const Match numbered = match_numbered(title, options);
+            const Match numbered = match_numbered(title);
             if (numbered.ok && numbered.level == 1) level = 1;
           }
           return make_match(level, title, kMarkdown);
@@ -1014,11 +1012,11 @@ Match match_heading(std::string_view raw, const ParseOptions& options) {
     match = candidate;
     return true;
   };
-  if (take(match_numbered(core, options))) {
+  if (take(match_numbered(core))) {
   } else if (take(match_special(core))) {
-  } else if (take(match_english(core, options))) {
-  } else if (take(match_bracket(core, options))) {
-  } else if (take(match_plain_number(core, options))) {
+  } else if (take(match_english(core))) {
+  } else if (take(match_bracket(core))) {
+  } else if (take(match_plain_number(core))) {
   } else if (options.accept_unnumbered_titles) {
     take(match_unnumbered(core, options));
   }
@@ -1232,7 +1230,7 @@ ParseResult parse_chapters(std::string_view utf8_text,
     chapter.start_line = body[k].line;
     chapter.end_line = (k + 1 < body.size()) ? body[k + 1].line : lines.size();
     chapter.synthetic = false;
-    split_heading_display(chapter.title, chapter.level, chapter);
+    split_heading_display(chapter.title, chapter);
     result.chapters.push_back(std::move(chapter));
   }
 
@@ -1253,7 +1251,7 @@ ParseResult parse_chapters(std::string_view utf8_text,
       preface.start_line = 0;
       preface.end_line = first_line;
       preface.synthetic = true;
-      split_heading_display(preface.title, preface.level, preface);
+      split_heading_display(preface.title, preface);
       result.chapters.insert(result.chapters.begin(), std::move(preface));
     }
   } else {
@@ -1264,7 +1262,7 @@ ParseResult parse_chapters(std::string_view utf8_text,
     whole.start_line = 0;
     whole.end_line = lines.size();
     whole.synthetic = true;
-    split_heading_display(whole.title, whole.level, whole);
+    split_heading_display(whole.title, whole);
     result.chapters.push_back(std::move(whole));
   }
 
@@ -1300,9 +1298,7 @@ std::size_t plain_marker_len(std::string_view s, std::size_t pos) {
 
 }  // namespace
 
-void split_heading_display(const std::string& full_title, int level,
-                           Chapter& chapter) {
-  (void)level;
+void split_heading_display(const std::string& full_title, Chapter& chapter) {
   chapter.number.clear();
   chapter.separator.clear();
   chapter.name = full_title;

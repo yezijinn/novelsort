@@ -24,7 +24,6 @@
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QHeaderView>
-#include <QInputDialog>
 #include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
@@ -45,7 +44,6 @@
 #include <QSizeGrip>
 #include <QSortFilterProxyModel>
 #include <QSpinBox>
-#include <QStackedWidget>
 #include <QStatusBar>
 #include <QStyledItemDelegate>
 #include <QTableView>
@@ -59,13 +57,12 @@
 #include <QUrl>
 #include <QVBoxLayout>
 
-
 #include <algorithm>
-#include <map>
 #include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iterator>
+#include <map>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -76,9 +73,10 @@
 #include "core/DirectoryEdit.hpp"
 #include "core/TextFile.hpp"
 #include "ui/ChapterTableView.hpp"
+#include "ui/CheckBoxStyle.hpp"
 #include "ui/PreviewEdit.hpp"
 #include "ui/Theme.hpp"
-#include "ui/CheckBoxStyle.hpp"
+#include "ui/UiMetrics.hpp"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -255,7 +253,7 @@ class ChapterDelegate : public QStyledItemDelegate {
                  const QModelIndex& index) const override {
     (void)option;
     (void)index;
-    return QSize(320, 32);
+    return QSize(metrics::kDelegateWidth, metrics::kRowHeight);
   }
 
   void paint(QPainter* painter, const QStyleOptionViewItem& option,
@@ -287,7 +285,7 @@ class ChapterDelegate : public QStyledItemDelegate {
     const bool synthetic = index.data(RoleSynthetic).toBool();
     const bool excluded = index.data(RoleExcluded).toBool();
 
-    const int kNumCol = 88;  // 第一列固定宽
+    const int kNumCol = metrics::kNumberColumnWidth;
     const int numColRight = r.left() + kNumCol;
     const QRect numRect(r.left() + 12, r.top(), kNumCol - 18, r.height());
     const QRect titleRect(numColRight + 8, r.top(),
@@ -380,13 +378,15 @@ struct MainWindow::Buttons {
   QPushButton* openExportLoc = nullptr;  // 打开导出位置
 };
 
+MainWindow::~MainWindow() = default;
+
 MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   // Windows 10 原生标题栏不跟随应用亮色主题，改用自绘标题栏。
   setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
   buildUi();
   setWindowTitle(QStringLiteral("novel-lines · TXT 章节识别与重排"));
-  resize(1200, 760);
-  setMinimumSize(1000, 640);
+  resize(metrics::kWindowWidth, metrics::kWindowHeight);
+  setMinimumSize(metrics::kMinWindowWidth, metrics::kMinWindowHeight);
 
   // 启动时按 QSettings 持久化的主题（默认暗色）应用一次。
   QSettings settings(QStringLiteral("novel-lines"), QStringLiteral("novel-lines"));
@@ -399,7 +399,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   connect(recoveryTimer_, &QTimer::timeout, this, [this]() {
     if (!recoveryEnabled_ || !dirty_ || !isLoaded_) return;
     writeRecoveryBackup();
-    if (dirty_ && isLoaded_) recoveryTimer_->start(2000);
+    if (dirty_ && isLoaded_) recoveryTimer_->start(metrics::kRecoveryRepeatMs);
   });
 
   applyModel();
@@ -418,7 +418,7 @@ void MainWindow::buildUi() {
   // ===== 自绘标题栏（34px）=====
   TitleBar* titleBar = new TitleBar(this);
   titleBar->setObjectName(QStringLiteral("customTitleBar"));
-  titleBar->setFixedHeight(34);
+  titleBar->setFixedHeight(metrics::kTitleBarHeight);
   QHBoxLayout* titleLayout = new QHBoxLayout(titleBar);
   titleLayout->setContentsMargins(12, 0, 0, 0);
   titleLayout->setSpacing(0);
@@ -435,7 +435,7 @@ void MainWindow::buildUi() {
     button->setObjectName(QStringLiteral("titleButton"));
     button->setProperty("role", close ? QStringLiteral("close")
                                      : QStringLiteral("normal"));
-    button->setFixedSize(46, 34);
+    button->setFixedSize(metrics::kTitleButtonWidth, metrics::kTitleBarHeight);
     button->setCursor(Qt::PointingHandCursor);
     button->setFocusPolicy(Qt::NoFocus);
     button->setToolTip(tip);
@@ -461,9 +461,9 @@ void MainWindow::buildUi() {
   connect(close, &QPushButton::clicked, this, &QWidget::close);
   root->addWidget(titleBar);
 
-  // ===== 顶栏（42px）+ 导出工具条（44px）=====
+  // ===== 顶栏与导出工具条 =====
   QFrame* topBar = new QFrame(this);
-  topBar->setFixedHeight(46);
+  topBar->setFixedHeight(metrics::kTopBarHeight);
   topBar->setObjectName(QStringLiteral("topBar"));
   QHBoxLayout* topLayout = new QHBoxLayout(topBar);
   topLayout->setContentsMargins(0, 0, 0, 0);
@@ -487,7 +487,7 @@ void MainWindow::buildUi() {
   dirtyChip_->setProperty("class", "chip");
   dirtyChip_->setObjectName(QStringLiteral("dirtyChip"));
   for (QLabel* chip : {encodingChip_, countChip_, dirtyChip_}) {
-    chip->setFixedHeight(32);
+    chip->setFixedHeight(metrics::kControlHeight);
     chip->setAlignment(Qt::AlignCenter);
   }
   encodingChip_->hide();
@@ -495,15 +495,15 @@ void MainWindow::buildUi() {
   dirtyChip_->hide();
 
   // 撤销 / 重做 小按钮（文字按钮，避免缺字字形出现空方块）
-  Buttons* b = new Buttons();
-  btns_ = b;
+  btns_ = std::make_unique<Buttons>();
+  Buttons* b = btns_.get();
   b->undo = new QPushButton(QStringLiteral("撤销"));
   b->redo = new QPushButton(QStringLiteral("重做"));
   for (QPushButton* p : {b->undo, b->redo}) {
     p->setCursor(Qt::PointingHandCursor);
     p->setObjectName(QStringLiteral("icon"));
-    p->setFixedHeight(32);
-    p->setMinimumWidth(46);
+    p->setFixedHeight(metrics::kControlHeight);
+    p->setMinimumWidth(metrics::kUndoMinWidth);
     p->setToolTip(QStringLiteral("撤销"));
   }
   connect(b->undo, &QPushButton::clicked, this, &MainWindow::onUndo);
@@ -515,7 +515,7 @@ void MainWindow::buildUi() {
 
   themeBtn_ = new QPushButton(QStringLiteral("明暗主题"));
   themeBtn_->setObjectName(QStringLiteral("icon"));
-  themeBtn_->setFixedHeight(32);
+  themeBtn_->setFixedHeight(metrics::kControlHeight);
   themeBtn_->setCursor(Qt::PointingHandCursor);
   themeBtn_->setToolTip(QStringLiteral("切换明/暗主题"));
   connect(themeBtn_, &QPushButton::clicked, this, &MainWindow::toggleTheme);
@@ -523,24 +523,24 @@ void MainWindow::buildUi() {
   b->open = new QPushButton(QStringLiteral("打开 TXT"));
   b->open->setProperty("class", "primary");
   b->open->setCursor(Qt::PointingHandCursor);
-  b->open->setFixedHeight(32);
+  b->open->setFixedHeight(metrics::kControlHeight);
   connect(b->open, &QPushButton::clicked, this, &MainWindow::onOpenClicked);
 
   b->exportTxt = new QPushButton(QStringLiteral("导出 TXT"));
   b->exportTxt->setObjectName(QStringLiteral("icon"));
-  b->exportTxt->setFixedHeight(32);
+  b->exportTxt->setFixedHeight(metrics::kControlHeight);
   b->exportTxt->setCursor(Qt::PointingHandCursor);
   connect(b->exportTxt, &QPushButton::clicked, this, &MainWindow::onExportTxt);
 
   b->exportJson = new QPushButton(QStringLiteral("导出目录 JSON"));
   b->exportJson->setObjectName(QStringLiteral("icon"));
-  b->exportJson->setFixedHeight(32);
+  b->exportJson->setFixedHeight(metrics::kControlHeight);
   b->exportJson->setCursor(Qt::PointingHandCursor);
   connect(b->exportJson, &QPushButton::clicked, this, &MainWindow::onExportJson);
 
   b->openExportLoc = new QPushButton(QStringLiteral("打开导出位置"));
   b->openExportLoc->setObjectName(QStringLiteral("icon"));
-  b->openExportLoc->setFixedHeight(32);
+  b->openExportLoc->setFixedHeight(metrics::kControlHeight);
   b->openExportLoc->setCursor(Qt::PointingHandCursor);
   b->openExportLoc->setEnabled(false);  // 导出前禁用
   connect(b->openExportLoc, &QPushButton::clicked, this,
@@ -556,7 +556,7 @@ void MainWindow::buildUi() {
   // 导出工具条：导出按钮、目标选项、打开位置放在同一行，全部常驻可见。
   QFrame* exportBar = new QFrame(this);
   exportBar->setObjectName(QStringLiteral("exportBar"));
-  exportBar->setFixedHeight(48);
+  exportBar->setFixedHeight(metrics::kExportBarHeight);
   QHBoxLayout* exportLayout = new QHBoxLayout(exportBar);
   exportLayout->setContentsMargins(0, 0, 0, 0);
   exportLayout->setSpacing(8);
@@ -584,7 +584,7 @@ void MainWindow::buildUi() {
   for (QPushButton* button :
        {b->exportTxt, b->exportJson, exportToExecDirButton_,
         b->openExportLoc}) {
-    button->setFixedHeight(32);
+    button->setFixedHeight(metrics::kControlHeight);
     button->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Fixed);
   }
   updateExportToExecDirButton();
@@ -596,10 +596,10 @@ void MainWindow::buildUi() {
   body->setContentsMargins(0, 0, 0, 0);
   body->setSpacing(0);
 
-  // 左栏（固定 380px）：标题 / 目录操作 / 复选框 / 搜索 / 列表 / 移动按钮。
+  // 左栏：目录操作、搜索与章节列表。
   QFrame* left = new QFrame(this);
   left->setObjectName(QStringLiteral("sidebar"));
-  left->setFixedWidth(380);
+  left->setFixedWidth(metrics::kSidebarWidth);
   left->setSizePolicy(QSizePolicy::Fixed, QSizePolicy::Expanding);
   QVBoxLayout* leftL = new QVBoxLayout(left);
   leftL->setContentsMargins(12, 12, 8, 12);
@@ -620,7 +620,7 @@ void MainWindow::buildUi() {
   b->resetOrder = new QPushButton(QStringLiteral("全部恢复原样"));
   for (QPushButton* p : {b->renumber, b->resetOrder}) {
     p->setObjectName(QStringLiteral("icon"));
-    p->setFixedHeight(32);
+    p->setFixedHeight(metrics::kControlHeight);
     p->setCursor(Qt::PointingHandCursor);
   }
   connect(b->renumber, &QPushButton::clicked, this, &MainWindow::onRenumber);
@@ -643,14 +643,14 @@ void MainWindow::buildUi() {
   acceptUnnumberedButton_ =
       new QPushButton(QStringLiteral("识别无编号标题：关"), this);
   acceptUnnumberedButton_->setObjectName(QStringLiteral("icon"));
-  acceptUnnumberedButton_->setFixedHeight(32);
+  acceptUnnumberedButton_->setFixedHeight(metrics::kControlHeight);
   acceptUnnumberedButton_->setCursor(Qt::PointingHandCursor);
   acceptUnnumberedButton_->setToolTip(
       QStringLiteral("识别「启程」「相遇」这类无编号短标题"));
   QPushButton* sortHintButton =
       new QPushButton(QStringLiteral("排序提示"), this);
   sortHintButton->setObjectName(QStringLiteral("icon"));
-  sortHintButton->setFixedHeight(32);
+  sortHintButton->setFixedHeight(metrics::kControlHeight);
   sortHintButton->setCursor(Qt::PointingHandCursor);
   sortHintButton->setToolTip(QStringLiteral("查看鼠标拖动与键盘排序说明"));
   connect(acceptUnnumberedButton_, &QPushButton::clicked, this, [this]() {
@@ -697,9 +697,9 @@ void MainWindow::buildUi() {
   tableView_->setItemDelegate(new ChapterDelegate(this));
   tableView_->setCornerButtonEnabled(false);
   tableView_->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
-  tableView_->verticalHeader()->setDefaultSectionSize(32);
-  tableView_->verticalHeader()->setMinimumSectionSize(32);
-  tableView_->setMinimumHeight(160);
+  tableView_->verticalHeader()->setDefaultSectionSize(metrics::kRowHeight);
+  tableView_->verticalHeader()->setMinimumSectionSize(metrics::kRowHeight);
+  tableView_->setMinimumHeight(metrics::kTableMinHeight);
   tableView_->setContextMenuPolicy(Qt::CustomContextMenu);
   tableView_->setToolTip(
       QStringLiteral("按住章节行拖动排序；也可用 Alt+↑ / Alt+↓ 移动"));
@@ -751,7 +751,7 @@ void MainWindow::buildUi() {
 
   QFrame* headRule = new QFrame(head);
   headRule->setObjectName(QStringLiteral("rule"));
-  headRule->setFixedHeight(1);
+  headRule->setFixedHeight(metrics::kHairline);
   headL->addWidget(headRule);
   cardL->addWidget(head);
 
@@ -771,7 +771,7 @@ void MainWindow::buildUi() {
   closeWarning->setObjectName(QStringLiteral("warningClose"));
   closeWarning->setCursor(Qt::PointingHandCursor);
   closeWarning->setFocusPolicy(Qt::NoFocus);
-  closeWarning->setFixedHeight(24);
+  closeWarning->setFixedHeight(metrics::kWarningCloseHeight);
   closeWarning->setToolTip(QStringLiteral("隐藏这条提醒，不改变文件内容"));
   warningLayout->addWidget(closeWarning, 0, Qt::AlignTop);
   connect(closeWarning, &QPushButton::clicked, this, [this]() {
@@ -859,8 +859,6 @@ void MainWindow::buildUi() {
   connect(delAct, &QAction::triggered, this, &MainWindow::onDeleteChapter);
   addAction(delAct);
 
-
-
   QAction* undoAct = new QAction(this);
   undoAct->setShortcut(QKeySequence::Undo);
   connect(undoAct, &QAction::triggered, this, &MainWindow::onUndo);
@@ -878,10 +876,11 @@ void MainWindow::buildUi() {
   addAction(redoShiftAct);
 
   sizeGrip_ = new QSizeGrip(central);
-  sizeGrip_->setFixedSize(18, 18);
+  sizeGrip_->setFixedSize(metrics::kSizeGrip, metrics::kSizeGrip);
   sizeGrip_->setToolTip(QStringLiteral("拖拽调整窗口大小"));
   sizeGrip_->raise();
-  sizeGrip_->move(central->width() - 18, central->height() - 18);
+  sizeGrip_->move(central->width() - metrics::kSizeGrip,
+                  central->height() - metrics::kSizeGrip);
 
   setAcceptDrops(true);
 }
@@ -1223,7 +1222,7 @@ void MainWindow::previewSourceRow(int sourceRow) {
   // 先把要显示的行拼成一段 QString（逐行以 \n 连接，末尾不加），
   // 再一次性写入文档；最后用 mergeBlockFormat / mergeCharFormat 套用
   // 正文行高、颜色与字体，避免逐行 insertBlock + insertText 的巨额开销。
-  const int kMax = 50000;
+  const int kMax = metrics::kPreviewCharLimit;
   QString body;
   QVector<int> mapping;
   bool cut = false;
@@ -1231,7 +1230,9 @@ void MainWindow::previewSourceRow(int sourceRow) {
     // 正文最多 kMax 个字符；不能按「行数 × 50」无上限预留，
     // 否则「全文」章或大量短行会白占约 10MB 临时内存。
     const std::size_t reserveChars = std::min<std::size_t>(
-        static_cast<std::size_t>(disp.size()) * 50 + 16,
+        static_cast<std::size_t>(disp.size()) *
+                metrics::kReserveCharsPerLine +
+            16,
         static_cast<std::size_t>(kMax) + 16);
     body.reserve(static_cast<int>(reserveChars));
     mapping.reserve(disp.size());
@@ -1327,7 +1328,6 @@ void MainWindow::previewSourceRow(int sourceRow) {
   previewCache_.themeDark = themeDark_;
   previewCache_.body = body;
   previewCache_.previewLineToSource = previewLineToSource_;
-  previewCache_.truncated = cut;
 }
 
 int MainWindow::previewCursorToSource(QTextCursor cursor) const {
@@ -1347,7 +1347,7 @@ void MainWindow::onSelectionChanged(const QModelIndex& current,
 void MainWindow::onSearchChanged(const QString& text) {
   proxy_->setFilterFixedString(text);
   // 搜索时禁用拖拽排序
-  tableView_->setDragEnabled(text.trimmed().isEmpty());
+  tableView_->setRowDragEnabled(text.trimmed().isEmpty());
   if (proxy_->rowCount() > 0) {
     tableView_->setCurrentIndex(proxy_->index(0, 0));
   }
@@ -1668,37 +1668,6 @@ void MainWindow::onMoveDown() {
   }
 }
 
-void MainWindow::onToTop() {
-  const QModelIndex cur = tableView_->currentIndex();
-  if (!cur.isValid()) return;
-  const int srcRow = proxy_->mapToSource(cur).row();
-  if (srcRow <= 0) return;
-  pushUndo();
-  if (chapterModel_->moveRow(srcRow, 0)) {
-    setDirty(true);
-    refreshSelectionAfterMove(0);
-    updateStatusBar();
-  } else {
-    undoStack_.pop_back();
-  }
-}
-
-void MainWindow::onToBottom() {
-  const QModelIndex cur = tableView_->currentIndex();
-  if (!cur.isValid()) return;
-  const int srcRow = proxy_->mapToSource(cur).row();
-  const int n = static_cast<int>(chapterModel_->chapters().size());
-  if (srcRow < 0 || srcRow >= n - 1) return;
-  pushUndo();
-  if (chapterModel_->moveRow(srcRow, n - 1)) {
-    setDirty(true);
-    refreshSelectionAfterMove(n - 1);
-    updateStatusBar();
-  } else {
-    undoStack_.pop_back();
-  }
-}
-
 void MainWindow::onResetOrder() {
   if (!isLoaded_) return;
   pushUndo();
@@ -1809,8 +1778,6 @@ void MainWindow::pushUndo() {
   updateControls();
 }
 
-void MainWindow::clearRedo() { redoStack_.clear(); }
-
 void MainWindow::applySnapshot(const Snapshot& snap) {
   chapterModel_->chapters() = snap.chapters;
   chapterModel_->refresh();
@@ -1909,7 +1876,7 @@ QDialog* makeDialog(QWidget* parent, const QString& title, bool dark,
                     QVBoxLayout** outLay) {
   QDialog* dlg = new QDialog(parent);
   dlg->setWindowTitle(title);
-  dlg->setMinimumWidth(460);
+  dlg->setMinimumWidth(metrics::kDialogMinWidth);
   dlg->setObjectName(QStringLiteral("dialog"));
 #ifdef _WIN32
   applyWindowsFrame(dlg->winId(), dark);
@@ -1931,7 +1898,7 @@ QHBoxLayout* fieldRow(QWidget* parent, QVBoxLayout* lay, const QString& label,
   QHBoxLayout* row = new QHBoxLayout();
   row->setSpacing(8);
   QLabel* lab = new QLabel(label, parent);
-  lab->setFixedWidth(44);
+  lab->setFixedWidth(metrics::kFieldLabelWidth);
   lab->setObjectName(QStringLiteral("dialogHint"));
   row->addWidget(lab);
   row->addWidget(edit, 1);
@@ -2056,7 +2023,6 @@ void MainWindow::applyExclusionFormats(const QVector<int>& sourceToBlock) {
     const int blk = sourceToBlock[static_cast<int>(line)];
     const QTextBlock block = doc->findBlockByNumber(blk);
     if (!block.isValid()) continue;
-    const QString text = block.text();
     // 字节偏移 -> UTF-16 字符位置
     std::size_t cursor = 0;
     std::vector<std::pair<int, int>> charSpans;
@@ -2070,7 +2036,6 @@ void MainWindow::applyExclusionFormats(const QVector<int>& sourceToBlock) {
       charSpans.emplace_back(static_cast<int>(cursor + len),
                              static_cast<int>(cursor + lenEnd));
     }
-    (void)text;
     QTextCursor c(doc);
     for (const auto& cs : charSpans) {
       c.setPosition(block.position() + cs.first);
@@ -2183,9 +2148,9 @@ void MainWindow::onSetInvalid() {
   lastPreviewSelection_ = QTextCursor();
   const int curRow = currentSourceRow();
   if (curRow >= 0) previewSourceRow(curRow);
+  updateStatusBar();
   statusLabel_->setText(
       QStringLiteral("已将选中文本标记为无效内容（导出时丢弃）"));
-  updateStatusBar();
 }
 
 void MainWindow::onToggleExcluded(bool excluded) {
@@ -2299,6 +2264,9 @@ void MainWindow::onDeleteChapter() {
     updateStatusBar();
   } else {
     undoStack_.pop_back();
+    updateControls();
+    show_warning_message(this, QStringLiteral("无法删除"),
+                         QStringLiteral("当前章节无法删除，文件内容未改动。"));
   }
 }
 
@@ -2337,7 +2305,7 @@ QDialog* MainWindow::buildRenumberDialog(RenumberFields& fields) {
     QHBoxLayout* row = new QHBoxLayout();
     row->setSpacing(8);
     QLabel* lab = new QLabel(text, dlg);
-    lab->setFixedWidth(68);
+    lab->setFixedWidth(metrics::kDialogLabelWidth);
     lab->setObjectName(QStringLiteral("dialogHint"));
     row->addWidget(lab);
     row->addWidget(w, 1);
@@ -2404,15 +2372,21 @@ void MainWindow::onRenumber() { renumberDialog(); }
 // ---------------------------------------------------------------------------
 void MainWindow::onRowDropped(int fromRow, int toRow) {
   const int n = static_cast<int>(chapterModel_->chapters().size());
-  if (fromRow < 0 || fromRow >= n) return;
-  int target = toRow;
+  if (fromRow < 0 || fromRow >= proxy_->rowCount()) return;
+  const int sourceFrom = proxy_->mapToSource(proxy_->index(fromRow, 0)).row();
+  if (sourceFrom < 0 || sourceFrom >= n) return;
+  int target = n;
+  if (toRow >= 0 && toRow < proxy_->rowCount()) {
+    target = proxy_->mapToSource(proxy_->index(toRow, 0)).row();
+  }
   if (target < 0) target = 0;
   if (target > n) target = n;
-  if (target == fromRow || target == fromRow + 1) return;
+  if (target == sourceFrom || target == sourceFrom + 1) return;
   pushUndo();
-  if (chapterModel_->moveRow(fromRow, target > fromRow ? target - 1 : target)) {
+  if (chapterModel_->moveRow(sourceFrom,
+                            target > sourceFrom ? target - 1 : target)) {
     setDirty(true);
-    int landed = target > fromRow ? target - 1 : target;
+    int landed = target > sourceFrom ? target - 1 : target;
     if (landed < 0) landed = 0;
     if (landed > n - 1) landed = n - 1;
     const QModelIndex idx =
@@ -2740,20 +2714,28 @@ bool MainWindow::exportContent(bool json) {
            : novel::render_txt(loadedText_, chapterModel_->chapters(),
                               tocLines_, excludedRanges_, textExclusions_);
 
-  QFile out(path);
-  if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+  QSaveFile out(path);
+  if (!out.open(QIODevice::WriteOnly)) {
     wait.restore();
     show_warning_message(this, QStringLiteral("导出失败"),
-                         QStringLiteral("无法写入文件：\n") + path);
+                         QStringLiteral("无法写入文件：\n") + path + "\n" +
+                             out.errorString());
     return false;
   }
   const qint64 written =
       out.write(content.data(), static_cast<qint64>(content.size()));
-  out.close();
   if (written != static_cast<qint64>(content.size())) {
+    out.cancelWriting();
     wait.restore();
     show_warning_message(this, QStringLiteral("导出失败"),
                          QStringLiteral("写入不完整：\n") + path);
+    return false;
+  }
+  if (!out.commit()) {
+    wait.restore();
+    show_warning_message(this, QStringLiteral("导出失败"),
+                         QStringLiteral("无法完成写入：\n") + path + "\n" +
+                             out.errorString());
     return false;
   }
 
@@ -2818,7 +2800,9 @@ void MainWindow::scheduleRecoveryBackup() {
       !recoveryTimer_) {
     return;
   }
-  if (!recoveryTimer_->isActive()) recoveryTimer_->start(1500);
+  if (!recoveryTimer_->isActive()) {
+    recoveryTimer_->start(metrics::kRecoveryDebounceMs);
+  }
 }
 
 bool MainWindow::writeRecoveryBackup() {

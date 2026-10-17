@@ -302,8 +302,8 @@ std::string render_txt(const std::string& original_utf8,
     out.resize(last_nonblank);
   }
 
-  // Refuse to silently drop lines that fall outside every chapter range.
-  // Deleted (excluded) lines are dropped on purpose and are not leftovers.
+  // 兜底：章节范围外的非空行也必须输出，不能静默丢字。
+  // 已删除的源行属于有意丢弃，不参与这段检查。
   bool any_leftover = false;
   for (std::size_t line = 0; line < lines.size(); ++line) {
     if (in_toc[line] || covered[line] || excluded[line]) continue;

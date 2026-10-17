@@ -25,8 +25,7 @@ ParseResult parse_chapters(std::string_view utf8_text,
 
 // 把完整标题拆成 number/separator/name 三列并判定 numbered。
 // 只写这三列与 numbered，不动 title；解析与编辑（改名/重编号/拆分）共用。
-void split_heading_display(const std::string& full_title, int level,
-                           Chapter& chapter);
+void split_heading_display(const std::string& full_title, Chapter& chapter);
 
 // Shared text helpers (also used by the renderer).
 std::vector<std::string> split_lines(std::string_view text);

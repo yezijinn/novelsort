@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,7 +26,6 @@ class QPushButton;
 class QSizeGrip;
 class QStatusBar;
 class QTimer;
-class QStackedWidget;
 class QComboBox;
 class QSpinBox;
 class QDialog;
@@ -47,8 +47,10 @@ class MainWindow : public QMainWindow {
 
  public:
   explicit MainWindow(QWidget* parent = nullptr);
+  ~MainWindow() override;
 
-  // 命令行 --input：加载失败也进入空窗口并提示
+  // 加载文件；调用方负责在替换当前内容前确认未保存修改。
+  // silent=true 时仅更新空状态，不弹加载错误框。
   void loadFile(const std::filesystem::path& path, bool silent = false);
 
   // 自检模式（--selftest）：无窗口交互，返回错误数（0 = 全 PASS）。
@@ -76,8 +78,6 @@ class MainWindow : public QMainWindow {
   void onSearchChanged(const QString& text);
   void onMoveUp();
   void onMoveDown();
-  void onToTop();
-  void onToBottom();
   void onResetOrder();
   void onAcceptUnnumberedToggled(bool checked);
   void onExportTxt();
@@ -155,7 +155,6 @@ class MainWindow : public QMainWindow {
   static void trimUndoStack(std::vector<Snapshot>& stack,
                             std::size_t stepLimit, std::size_t byteLimit);
   void pushUndo();
-  void clearRedo();
   void undo();
   void redo();
   void applySnapshot(const Snapshot& snap);
@@ -233,7 +232,7 @@ class MainWindow : public QMainWindow {
 
   // 按钮
   struct Buttons;
-  Buttons* btns_ = nullptr;
+  std::unique_ptr<Buttons> btns_;
   bool themeDark_ = true;
 
   // 导出相关：记忆「导出到程序位置」勾选；记录最近一次导出路径用于「打开位置」
@@ -283,7 +282,6 @@ class MainWindow : public QMainWindow {
     bool themeDark = true;
     QString body;
     QVector<int> previewLineToSource;
-    bool truncated = false;
 
     bool empty() const { return sourceRow < 0; }
     void reset() { *this = PreviewCache{}; }

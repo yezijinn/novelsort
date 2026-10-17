@@ -773,7 +773,7 @@ bool number_parts_of(const Chapter& chapter, NumberParts& parts) {
     return true;
   }
   Chapter probe;
-  split_heading_display(chapter.title, chapter.level, probe);
+  split_heading_display(chapter.title, probe);
   return !probe.number.empty() && parse_number_parts(probe.number, parts);
 }
 
@@ -795,7 +795,7 @@ bool build_inserted(Chapter& chapter, std::string_view title, int level) {
   chapter.level = level;
   chapter.heading_line = clean;
   chapter.title = strip_heading_marks(clean);
-  split_heading_display(chapter.title, level, chapter);
+  split_heading_display(chapter.title, chapter);
   chapter.inserted = true;
   chapter.renamed = true;
   chapter.synthetic = false;
@@ -827,7 +827,8 @@ bool rename_chapter(Chapter& ch, std::string_view title) {
   ch.title = clean;
   ch.renamed = true;
   // title 是唯一真源：改名后重新拆两列，避免序号列与标题脱节。
-  split_heading_display(ch.title, ch.level, ch);
+  split_heading_display(ch.title, ch);
+  sync_inserted_heading(ch);
   return true;
 }
 
@@ -848,8 +849,9 @@ bool rename_chapter_parts(Chapter& ch, std::string_view number,
   ch.renamed = true;
 
   Chapter probe;
-  split_heading_display(ch.title, ch.level, probe);
+  split_heading_display(ch.title, probe);
   ch.numbered = !parts_number.empty() && probe.numbered;
+  sync_inserted_heading(ch);
   return true;
 }
 
@@ -1098,7 +1100,7 @@ bool split_chapter_numbered(std::vector<Chapter>& chapters, int index,
   rebuild_title(fresh);
   if (!origin_numbered) {
     Chapter probe;
-    split_heading_display(fresh.title, level, probe);
+    split_heading_display(fresh.title, probe);
     fresh.numbered = !fresh_number.empty() && probe.numbered;
     fresh_numbered = fresh.numbered;
   } else {
@@ -1149,7 +1151,8 @@ bool move_body_to_previous(std::vector<Chapter>& chapters, int index) {
 
   // 插入章的 start_line 本身就是正文首行，其余章的正文从 start_line+1 起。
   const std::size_t body_begin =
-      current.inserted ? current.start_line : current.start_line + 1;
+      (current.inserted || current.synthetic) ? current.start_line
+                                               : current.start_line + 1;
   const bool has_body = current.end_line > body_begin ||
                         !current.extra_body.empty();
   if (!has_body) return false;
@@ -1164,8 +1167,9 @@ bool move_body_to_previous(std::vector<Chapter>& chapters, int index) {
   normalize_extra_body(previous.extra_body);
   dedupe_skip_lines(previous.skip_lines);
 
-  current.end_line = current.inserted ? current.start_line
-                                      : current.start_line + 1;
+  current.end_line = (current.inserted || current.synthetic)
+                         ? current.start_line
+                         : current.start_line + 1;
   current.extra_body.clear();
   return true;
 }
@@ -1178,7 +1182,8 @@ bool move_body_to_next(std::vector<Chapter>& chapters, int index) {
   Chapter& next = chapters[static_cast<std::size_t>(index) + 1];
 
   const std::size_t body_begin =
-      current.inserted ? current.start_line : current.start_line + 1;
+      (current.inserted || current.synthetic) ? current.start_line
+                                               : current.start_line + 1;
   if (current.end_line <= body_begin && current.extra_body.empty()) {
     return false;
   }
@@ -1192,8 +1197,9 @@ bool move_body_to_next(std::vector<Chapter>& chapters, int index) {
 
   next.extra_body.insert(next.extra_body.begin(), moved.begin(), moved.end());
   normalize_extra_body(next.extra_body);
-  current.end_line = current.inserted ? current.start_line
-                                      : current.start_line + 1;
+  current.end_line = (current.inserted || current.synthetic)
+                         ? current.start_line
+                         : current.start_line + 1;
   current.extra_body.clear();
   return true;
 }
