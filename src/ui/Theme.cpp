@@ -1,4 +1,4 @@
-﻿#include "ui/Theme.hpp"
+#include "ui/Theme.hpp"
 
 #include <QApplication>
 #include <QCheckBox>
@@ -116,207 +116,223 @@ QString globalStylesheet(bool dark) {
 
   // 复选框对勾由 ui::CheckBoxStyle 用 QPainter 自绘（Qt5 不支持 QSS
   // data URI，原 SVG 方案对勾不可见）。这里仅保留底色/描边语义。
-  const QStringList vals = {
-      bg, text, panel, border, sub, hover, a, aBg, dirtyBg, dirtyText,
-      aBg, a, invalidBg, invalidText, dirtyBorder, invalidBorder};
+  // token -> 颜色：按名引用，顺序变化不会错位。
+  const QHash<QString, QString> colors = {
+      {QStringLiteral("bg"), bg},
+      {QStringLiteral("text"), text},
+      {QStringLiteral("panel"), panel},
+      {QStringLiteral("border"), border},
+      {QStringLiteral("sub"), sub},
+      {QStringLiteral("hover"), hover},
+      {QStringLiteral("accent"), a},
+      {QStringLiteral("accentBg"), aBg},
+      {QStringLiteral("dirtyBg"), dirtyBg},
+      {QStringLiteral("dirtyText"), dirtyText},
+      {QStringLiteral("dirtyBorder"), dirtyBorder},
+      {QStringLiteral("invalidBg"), invalidBg},
+      {QStringLiteral("invalidText"), invalidText},
+      {QStringLiteral("invalidBorder"), invalidBorder},
+      {QStringLiteral("warning"), warning},
+      {QStringLiteral("invalid"), invalid}};
 
   QString sheet = QStringLiteral(R"(
 /* ===== 全局基线 ===== */
 QWidget {
-  background-color: %1;
-  color: %2;
+  background-color: %{bg};
+  color: %{text};
   font-family: "Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", sans-serif;
   font-size: 10.5pt;
   border: none;
   outline: 0;
 }
-QLabel { background: transparent; color: %2; }
+QLabel { background: transparent; color: %{text}; }
 QFrame { background: transparent; }
 
 /* ===== 顶栏 / 标志 / 标题（objectName 规则，随主题切换） ===== */
-QFrame#sidebar { background-color: %1; border-right: 1px solid %4; }
-QFrame#customTitleBar { background-color: %3; border-bottom: 1px solid %4; }
-QLabel#windowTitle { color: %5; font-size: 10pt; background: transparent; }
-QLabel#fileLabel { color: %2; font-size: 10.5pt; background: transparent; }
+QFrame#sidebar { background-color: %{bg}; border-right: 1px solid %{border}; }
+QFrame#customTitleBar { background-color: %{panel}; border-bottom: 1px solid %{border}; }
+QLabel#windowTitle { color: %{sub}; font-size: 10pt; background: transparent; }
+QLabel#fileLabel { color: %{text}; font-size: 10.5pt; background: transparent; }
 QPushButton#titleButton {
   background: transparent; border: none; border-radius: 0; padding: 0;
-  color: %5; font-size: 13pt;
+  color: %{sub}; font-size: 13pt;
 }
-QPushButton#titleButton:hover { background-color: %6; color: %2; }
-QPushButton#titleButton:pressed { background-color: %4; }
+QPushButton#titleButton:hover { background-color: %{hover}; color: %{text}; }
+QPushButton#titleButton:pressed { background-color: %{border}; }
 QPushButton#titleButton[role="close"]:hover {
   background-color: #C42B1C; color: #FFFFFF;
 }
-QFrame#topBar { background-color: %3; border-bottom: 1px solid %4; }
-QFrame#exportBar { background-color: %3; border-bottom: 1px solid %4; }
+QFrame#topBar { background-color: %{panel}; border-bottom: 1px solid %{border}; }
+QFrame#exportBar { background-color: %{panel}; border-bottom: 1px solid %{border}; }
 QLabel#logo {
-  background-color: %8; color: %7; border: 1px solid %7;
+  background-color: %{accentBg}; color: %{accent}; border: 1px solid %{accent};
   border-radius: 8px; font-weight: bold; font-size: 13pt;
 }
-QLabel#appTitle { font-size: 12pt; font-weight: bold; color: %2; background: transparent; }
-QLabel#subTitle { color: %5; font-size: 10.5pt; background: transparent; }
-QStatusBar { background-color: %1; color: %5; border-top: 1px solid %4; padding: 2px 4px; }
+QLabel#appTitle { font-size: 12pt; font-weight: bold; color: %{text}; background: transparent; }
+QLabel#subTitle { color: %{sub}; font-size: 10.5pt; background: transparent; }
+QStatusBar { background-color: %{bg}; color: %{sub}; border-top: 1px solid %{border}; padding: 2px 4px; }
 QStatusBar::item { border: none; }
-QStatusBar QLabel { color: %2; background: transparent; }
+QStatusBar QLabel { color: %{text}; background: transparent; }
 
 /* ===== chip ===== */
 QLabel.chip {
-  background-color: %3; color: %5; border: 1px solid %4;
+  background-color: %{panel}; color: %{sub}; border: 1px solid %{border};
   border-radius: 8px; padding: 3px 10px; font-size: 10.5pt;
 }
-QLabel.chip#dirtyChip { background-color: %9; color: %10; border: 1px solid %15; font-weight: bold; }
-QLabel.chip#warnChip { background-color: %9; color: %10; border: 1px solid %15; }
-QLabel.chip#invalidChip { background-color: %7; color: %14; border: 1px solid %16; }
+QLabel.chip#dirtyChip { background-color: %{dirtyBg}; color: %{dirtyText}; border: 1px solid %{dirtyBorder}; font-weight: bold; }
+QLabel.chip#warnChip { background-color: %{dirtyBg}; color: %{dirtyText}; border: 1px solid %{dirtyBorder}; }
+QLabel.chip#invalidChip { background-color: %{accent}; color: %{invalidText}; border: 1px solid %{invalidBorder}; }
 
 /* ===== 按钮（class 规则，随主题切换） ===== */
 QPushButton {
-  background-color: %3; color: %2; border: 1px solid %4;
+  background-color: %{panel}; color: %{text}; border: 1px solid %{border};
   border-radius: 8px; padding: 3px 10px; font-size: 10.5pt;
 }
-QPushButton:hover { background-color: %6; border-color: %4; }
-QPushButton:pressed { background-color: %6; }
-QPushButton:disabled { color: %5; background-color: %3; border-color: %4; }
-QPushButton:focus { border-color: %7; }
+QPushButton:hover { background-color: %{hover}; border-color: %{border}; }
+QPushButton:pressed { background-color: %{hover}; }
+QPushButton:disabled { color: %{sub}; background-color: %{panel}; border-color: %{border}; }
+QPushButton:focus { border-color: %{accent}; }
 
 QPushButton.primary {
-  background-color: %8; border: 1px solid %7; color: %7;
+  background-color: %{accentBg}; border: 1px solid %{accent}; color: %{accent};
 }
-QPushButton.primary:hover { background-color: %6; border-color: %7; }
-QPushButton.primary:pressed { background-color: %8; }
-QPushButton.primary:disabled { color: %5; background-color: %3; border-color: %4; }
+QPushButton.primary:hover { background-color: %{hover}; border-color: %{accent}; }
+QPushButton.primary:pressed { background-color: %{accentBg}; }
+QPushButton.primary:disabled { color: %{sub}; background-color: %{panel}; border-color: %{border}; }
 
 QPushButton#icon { padding: 3px 6px; font-size: 10.5pt; }
 
 /* ===== 搜索框 ===== */
 QLineEdit {
-  background-color: %1; border: 1px solid %4; border-radius: 8px;
-  padding: 8px 12px; color: %2; font-size: 10.5pt;
+  background-color: %{bg}; border: 1px solid %{border}; border-radius: 8px;
+  padding: 8px 12px; color: %{text}; font-size: 10.5pt;
 }
-QLineEdit:focus { border: 1px solid %7; }
-QLineEdit:disabled { color: %5; }
+QLineEdit:focus { border: 1px solid %{accent}; }
+QLineEdit:disabled { color: %{sub}; }
 
 /* ===== 列表 ===== */
 QTableView {
-  background-color: %3; border: 1px solid %4; border-radius: 10px;
+  background-color: %{panel}; border: 1px solid %{border}; border-radius: 10px;
   gridline-color: transparent; selection-background-color: transparent;
-  selection-color: %2; font-size: 10.5pt; padding: 4px;
+  selection-color: %{text}; font-size: 10.5pt; padding: 4px;
 }
 QTableView::item { border: none; padding: 0; }
 QTableView::item:selected { background: transparent; }
 QHeaderView { background: transparent; }
 QHeaderView::section { background: transparent; border: none; }
-QTableView:focus { border: 1px solid %7; }
+QTableView:focus { border: 1px solid %{accent}; }
 
 /* ===== 复选框 ===== */
 /* 指示器完全交给 ui::CheckBoxStyle 自绘；这里不要给 indicator 设置任何
    QSS 属性，否则 QStyleSheetStyle 会接管绘制，导致勾选框只剩文字。 */
-QCheckBox { background: transparent; spacing: 8px; color: %5; }
+QCheckBox { background: transparent; spacing: 8px; color: %{sub}; }
 QCheckBox::indicator { width: 20px; height: 20px; }
-QCheckBox:checked { color: %2; }
+QCheckBox:checked { color: %{text}; }
 
 /* ===== 目录标题 ===== */
-QLabel#dirTitle { font-size: 12pt; font-weight: bold; color: %2; background: transparent; }
-QLabel#dirCount { color: %5; font-size: 10.5pt; background: transparent; }
+QLabel#dirTitle { font-size: 12pt; font-weight: bold; color: %{text}; background: transparent; }
+QLabel#dirCount { color: %{sub}; font-size: 10.5pt; background: transparent; }
 
 /* ===== 文本预览 ===== */
-QFrame#previewCard { background-color: %3; border: 1px solid %4; border-radius: 10px; }
-QLabel#previewTitle { font-size: 18pt; font-weight: bold; color: %2; background: transparent; }
+QFrame#previewCard { background-color: %{panel}; border: 1px solid %{border}; border-radius: 10px; }
+QLabel#previewTitle { font-size: 18pt; font-weight: bold; color: %{text}; background: transparent; }
 QLabel#previewMeta {
   font-family: "Cascadia Mono", Consolas, monospace; font-size: 10pt;
-  color: %5; background: transparent;
+  color: %{sub}; background: transparent;
 }
-QLabel#emptyLabel { color: %5; font-size: 14pt; background: transparent; }
+QLabel#emptyLabel { color: %{sub}; font-size: 14pt; background: transparent; }
 QFrame#previewWarningBar {
-  background-color: %9; border: 1px solid %15; border-radius: 6px;
+  background-color: %{dirtyBg}; border: 1px solid %{dirtyBorder}; border-radius: 6px;
 }
 QLabel#previewWarning {
-  color: %10; background: transparent; border: none; font-size: 10pt;
+  color: %{dirtyText}; background: transparent; border: none; font-size: 10pt;
 }
 QPushButton#warningClose {
-  background: transparent; color: %10; border: 1px solid %15;
+  background: transparent; color: %{dirtyText}; border: 1px solid %{dirtyBorder};
   border-radius: 5px; padding: 1px 7px; font-size: 10pt;
 }
-QPushButton#warningClose:hover { background-color: %15; color: %2; }
-QFrame#rule { background-color: %4; }
+QPushButton#warningClose:hover { background-color: %{dirtyBorder}; color: %{text}; }
+QFrame#rule { background-color: %{border}; }
 QTextEdit {
   background-color: transparent; border: none; padding: 12px 4px 0 0;
-  color: %2; font-size: 12pt; selection-background-color: %7;
+  color: %{text}; font-size: 12pt; selection-background-color: %{accent};
   selection-color: #FFFFFF;
 }
 
 /* ===== 滚动条 ===== */
 QScrollBar:vertical { background: transparent; width: 10px; margin: 2px; }
 QScrollBar::handle:vertical {
-  background: %4; border-radius: 5px; min-height: 28px;
+  background: %{border}; border-radius: 5px; min-height: 28px;
 }
-QScrollBar::handle:vertical:hover { background: %5; }
+QScrollBar::handle:vertical:hover { background: %{sub}; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; background: transparent; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
 QScrollBar:horizontal { background: transparent; height: 10px; margin: 2px; }
-QScrollBar::handle:horizontal { background: %4; border-radius: 5px; min-width: 28px; }
-QScrollBar::handle:horizontal:hover { background: %5; }
+QScrollBar::handle:horizontal { background: %{border}; border-radius: 5px; min-width: 28px; }
+QScrollBar::handle:horizontal:hover { background: %{sub}; }
 QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; background: transparent; }
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal { background: transparent; }
 
 /* ===== 提示气泡 ===== */
 QToolTip {
-  background-color: %3; color: %2; border: 1px solid %4;
+  background-color: %{panel}; color: %{text}; border: 1px solid %{border};
   border-radius: 6px; padding: 5px 9px; font-size: 10pt;
 }
 
 /* ===== 右键菜单 ===== */
 QMenu {
-  background-color: %3; border: 1px solid %4; border-radius: 8px;
-  padding: 6px; color: %2; font-size: 10.5pt;
+  background-color: %{panel}; border: 1px solid %{border}; border-radius: 8px;
+  padding: 6px; color: %{text}; font-size: 10.5pt;
 }
 QMenu::item {
   background: transparent; padding: 7px 18px 7px 26px;
-  border-radius: 6px; color: %2;
+  border-radius: 6px; color: %{text};
 }
-QMenu::item:selected { background-color: %6; }
-QMenu::item:disabled { color: %5; }
-QMenu::separator { height: 1px; background: %4; margin: 5px 8px; }
+QMenu::item:selected { background-color: %{hover}; }
+QMenu::item:disabled { color: %{sub}; }
+QMenu::separator { height: 1px; background: %{border}; margin: 5px 8px; }
 
 /* ===== 自定义对话框 ===== */
-QDialog { background-color: %1; color: %2; }
-QDialog QLabel { color: %2; }
-QDialog QLabel#dialogTitle { color: %2; font-size: 13pt; font-weight: bold; background: transparent; }
-QDialog QLabel#dialogHint { color: %5; font-size: 11pt; background: transparent; }
+QDialog { background-color: %{bg}; color: %{text}; }
+QDialog QLabel { color: %{text}; }
+QDialog QLabel#dialogTitle { color: %{text}; font-size: 13pt; font-weight: bold; background: transparent; }
+QDialog QLabel#dialogHint { color: %{sub}; font-size: 11pt; background: transparent; }
 
 /* ===== 下拉框 / 微调框 ===== */
 QComboBox {
-  background-color: %1; border: 1px solid %4; border-radius: 8px;
-  padding: 6px 10px; color: %2; font-size: 10.5pt; min-height: 18px;
+  background-color: %{bg}; border: 1px solid %{border}; border-radius: 8px;
+  padding: 6px 10px; color: %{text}; font-size: 10.5pt; min-height: 18px;
 }
-QComboBox:hover { border-color: %7; }
-QComboBox:focus { border: 1px solid %7; }
+QComboBox:hover { border-color: %{accent}; }
+QComboBox:focus { border: 1px solid %{accent}; }
 QComboBox::drop-down { subcontrol-origin: padding; subcontrol-position: top right; width: 22px; border: none; }
 QComboBox::down-arrow {
   image: none; border-left: 5px solid transparent; border-right: 5px solid transparent;
-  border-top: 6px solid %5; width: 0; height: 0; margin-right: 8px;
+  border-top: 6px solid %{sub}; width: 0; height: 0; margin-right: 8px;
 }
 QComboBox QAbstractItemView {
-  background-color: %3; border: 1px solid %4; border-radius: 8px;
-  selection-background-color: %6; color: %2; padding: 4px;
+  background-color: %{panel}; border: 1px solid %{border}; border-radius: 8px;
+  selection-background-color: %{hover}; color: %{text}; padding: 4px;
 }
 QSpinBox {
-  background-color: %1; border: 1px solid %4; border-radius: 8px;
-  padding: 6px 10px; color: %2; font-size: 10.5pt;
+  background-color: %{bg}; border: 1px solid %{border}; border-radius: 8px;
+  padding: 6px 10px; color: %{text}; font-size: 10.5pt;
 }
-QSpinBox:hover { border-color: %7; }
-QSpinBox:focus { border: 1px solid %7; }
+QSpinBox:hover { border-color: %{accent}; }
+QSpinBox:focus { border: 1px solid %{accent}; }
 QSpinBox::up-button, QSpinBox::down-button { background: transparent; border: none; width: 18px; }
 QSpinBox::up-arrow, QSpinBox::down-arrow { image: none; }
 
 /* ===== 消息框 ===== */
-QMessageBox { background-color: %1; color: %2; }
-QMessageBox QLabel { color: %2; background: transparent; }
+QMessageBox { background-color: %{bg}; color: %{text}; }
+QMessageBox QLabel { color: %{text}; background: transparent; }
 QMessageBox QDialogButtonBox QPushButton { min-width: 84px; }
 )");
 
-  // 从大到小替换，避免 "%1" 误中 "%10" 等。
-  for (int i = vals.size() - 1; i >= 0; --i) {
-    sheet.replace(QStringLiteral("%") + QString::number(i + 1), vals.at(i));
+  // 按 token 名替换：%{bg} 这类占位符不受插入顺序影响。
+  for (auto it = colors.constBegin(); it != colors.constEnd(); ++it) {
+    sheet.replace(QStringLiteral("%{") + it.key() + QStringLiteral("}"),
+                  it.value());
   }
   return sheet;
 }

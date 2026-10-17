@@ -75,6 +75,7 @@
 #include "ui/ChapterTableView.hpp"
 #include "ui/CheckBoxStyle.hpp"
 #include "ui/PreviewEdit.hpp"
+#include "ui/RecoveryStore.hpp"
 #include "ui/Theme.hpp"
 #include "ui/UiMetrics.hpp"
 
@@ -147,10 +148,6 @@ class TitleBar : public QFrame {
   bool dragging_ = false;
   QPoint dragOffset_;
 };
-
-constexpr quint32 kRecoveryMagic = 0x4E4C5243;  // NLRC
-constexpr quint32 kRecoveryVersion = 1;
-constexpr qint32 kRecoveryMaxItems = 1000000;
 
 void show_info_message(QWidget* parent, const QString& title,
                        const QString& text) {
@@ -2799,174 +2796,23 @@ bool MainWindow::writeRecoveryBackup() {
   const QFileInfo sourceInfo(sourcePath);
   if (!sourceInfo.exists()) return false;
 
-  QSaveFile file(recoveryFilePath());
-  if (!file.open(QIODevice::WriteOnly)) return false;
-  QDataStream out(&file);
-  out.setVersion(QDataStream::Qt_5_9);
-  out << kRecoveryMagic << kRecoveryVersion;
-  out << sourcePath;
-  out << qint64(sourceInfo.size());
-  out << qint64(sourceInfo.lastModified().toMSecsSinceEpoch());
-  out << qint64(QDateTime::currentMSecsSinceEpoch());
-  out << QString::fromStdString(loadedEncoding_);
-  out << quint8(acceptUnnumbered_ && acceptUnnumbered_->isChecked() ? 1 : 0);
-  out << qint32(currentSourceRow());
-
-  const std::vector<novel::Chapter>& chapters = chapterModel_->chapters();
-  out << qint32(chapters.size());
-  for (const novel::Chapter& ch : chapters) {
-    out << qint32(ch.index) << qint32(ch.level);
-    out << QString::fromStdString(ch.title);
-    out << QString::fromStdString(ch.heading_line);
-    out << quint64(ch.start_line) << quint64(ch.end_line);
-    out << quint8(ch.synthetic ? 1 : 0);
-    out << quint8(ch.renamed ? 1 : 0);
-    out << quint8(ch.level_changed ? 1 : 0);
-    out << quint8(ch.inserted ? 1 : 0);
-    out << quint8(ch.suppressed ? 1 : 0);
-    out << qint32(ch.skip_lines.size());
-    for (const std::size_t line : ch.skip_lines) out << quint64(line);
-    out << QString::fromStdString(ch.number);
-    out << QString::fromStdString(ch.name);
-    out << QString::fromStdString(ch.separator);
-    out << quint8(ch.numbered ? 1 : 0);
-    out << quint8(ch.excluded_from_numbering ? 1 : 0);
-    out << qint32(ch.extra_body.size());
-    for (const novel::LineRange& range : ch.extra_body) {
-      out << quint64(range.begin) << quint64(range.end);
-    }
-  }
-
-  out << qint32(excludedRanges_.size());
-  for (const novel::LineRange& range : excludedRanges_) {
-    out << quint64(range.begin) << quint64(range.end);
-  }
-  out << qint32(textExclusions_.size());
-  for (const novel::TextExclusion& exclusion : textExclusions_) {
-    out << quint64(exclusion.line) << quint64(exclusion.begin_byte)
-        << quint64(exclusion.end_byte);
-  }
-
-  if (out.status() != QDataStream::Ok) {
-    file.cancelWriting();
-    return false;
-  }
-  return file.commit();
+  RecoveryData snapshot;
+  snapshot.sourcePath = sourcePath;
+  snapshot.sourceSize = sourceInfo.size();
+  snapshot.sourceMTime = sourceInfo.lastModified().toMSecsSinceEpoch();
+  snapshot.savedAtMs = QDateTime::currentMSecsSinceEpoch();
+  snapshot.encoding = QString::fromStdString(loadedEncoding_);
+  snapshot.acceptUnnumbered =
+      acceptUnnumbered_ && acceptUnnumbered_->isChecked();
+  snapshot.selectedSourceRow = currentSourceRow();
+  snapshot.chapters = chapterModel_->chapters();
+  snapshot.excluded = excludedRanges_;
+  snapshot.exclusions = textExclusions_;
+  return writeRecovery(recoveryFilePath(), snapshot);
 }
 
 bool MainWindow::readRecoveryBackup(RecoveryData& backup) const {
-  QFile file(recoveryFilePath());
-  if (!file.open(QIODevice::ReadOnly)) return false;
-  QDataStream in(&file);
-  in.setVersion(QDataStream::Qt_5_9);
-
-  quint32 magic = 0;
-  quint32 version = 0;
-  in >> magic >> version;
-  if (magic != kRecoveryMagic || version != kRecoveryVersion) return false;
-
-  qint64 sourceSize = 0;
-  qint64 sourceMTime = 0;
-  qint64 savedAt = 0;
-  quint8 acceptUnnumbered = 0;
-  qint32 selected = -1;
-  in >> backup.sourcePath >> sourceSize >> sourceMTime >> savedAt >>
-      backup.encoding >> acceptUnnumbered >> selected;
-  if (backup.sourcePath.isEmpty()) return false;
-  backup.sourceSize = sourceSize;
-  backup.sourceMTime = sourceMTime;
-  backup.savedAtMs = savedAt;
-  backup.acceptUnnumbered = acceptUnnumbered != 0;
-  backup.selectedSourceRow = selected;
-
-  qint32 chapterCount = 0;
-  in >> chapterCount;
-  if (chapterCount < 0 || chapterCount > kRecoveryMaxItems) return false;
-  backup.chapters.resize(static_cast<std::size_t>(chapterCount));
-  for (novel::Chapter& ch : backup.chapters) {
-    qint32 index = 0;
-    qint32 level = 2;
-    quint64 start = 0;
-    quint64 end = 0;
-    quint8 synthetic = 0;
-    quint8 renamed = 0;
-    quint8 levelChanged = 0;
-    quint8 inserted = 0;
-    quint8 suppressed = 0;
-    qint32 skipCount = 0;
-    qint32 extraCount = 0;
-    quint8 numbered = 0;
-    quint8 excluded = 0;
-    QString title;
-    QString heading;
-    QString number;
-    QString name;
-    QString separator;
-    in >> index >> level >> title >> heading >> start >> end >>
-        synthetic >> renamed >> levelChanged >> inserted >> suppressed >>
-        skipCount;
-    if (skipCount < 0 || skipCount > kRecoveryMaxItems) return false;
-    ch.skip_lines.resize(static_cast<std::size_t>(skipCount));
-    for (std::size_t& line : ch.skip_lines) {
-      quint64 value = 0;
-      in >> value;
-      line = static_cast<std::size_t>(value);
-    }
-    in >> number >> name >> separator >> numbered >> excluded >> extraCount;
-    ch.title = title.toStdString();
-    ch.heading_line = heading.toStdString();
-    ch.number = number.toStdString();
-    ch.name = name.toStdString();
-    ch.separator = separator.toStdString();
-    if (extraCount < 0 || extraCount > kRecoveryMaxItems) return false;
-    ch.extra_body.resize(static_cast<std::size_t>(extraCount));
-    for (novel::LineRange& range : ch.extra_body) {
-      quint64 begin = 0;
-      quint64 finish = 0;
-      in >> begin >> finish;
-      range.begin = static_cast<std::size_t>(begin);
-      range.end = static_cast<std::size_t>(finish);
-    }
-    ch.index = index;
-    ch.level = level;
-    ch.start_line = static_cast<std::size_t>(start);
-    ch.end_line = static_cast<std::size_t>(end);
-    ch.synthetic = synthetic != 0;
-    ch.renamed = renamed != 0;
-    ch.level_changed = levelChanged != 0;
-    ch.inserted = inserted != 0;
-    ch.suppressed = suppressed != 0;
-    ch.numbered = numbered != 0;
-    ch.excluded_from_numbering = excluded != 0;
-  }
-
-  qint32 excludedCount = 0;
-  in >> excludedCount;
-  if (excludedCount < 0 || excludedCount > kRecoveryMaxItems) return false;
-  backup.excluded.resize(static_cast<std::size_t>(excludedCount));
-  for (novel::LineRange& range : backup.excluded) {
-    quint64 begin = 0;
-    quint64 finish = 0;
-    in >> begin >> finish;
-    range.begin = static_cast<std::size_t>(begin);
-    range.end = static_cast<std::size_t>(finish);
-  }
-
-  qint32 exclusionCount = 0;
-  in >> exclusionCount;
-  if (exclusionCount < 0 || exclusionCount > kRecoveryMaxItems) return false;
-  backup.exclusions.resize(static_cast<std::size_t>(exclusionCount));
-  for (novel::TextExclusion& exclusion : backup.exclusions) {
-    quint64 line = 0;
-    quint64 begin = 0;
-    quint64 finish = 0;
-    in >> line >> begin >> finish;
-    exclusion.line = static_cast<std::size_t>(line);
-    exclusion.begin_byte = static_cast<std::size_t>(begin);
-    exclusion.end_byte = static_cast<std::size_t>(finish);
-  }
-
-  return in.status() == QDataStream::Ok;
+  return readRecovery(recoveryFilePath(), backup);
 }
 
 bool MainWindow::tryRecoverBackup() {

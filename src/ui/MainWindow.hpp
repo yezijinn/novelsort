@@ -15,6 +15,7 @@
 
 #include "core/Chapter.hpp"
 #include "ui/ChapterModel.hpp"
+#include "ui/RecoveryStore.hpp"
 
 class QTextEdit;
 class QTableView;
@@ -99,18 +100,6 @@ class MainWindow : public QMainWindow {
   void onRowDropped(int fromRow, int toRow);
 
  private:
-  struct RecoveryData {
-    QString sourcePath;
-    qint64 sourceSize = 0;
-    qint64 sourceMTime = 0;
-    qint64 savedAtMs = 0;
-    QString encoding;
-    bool acceptUnnumbered = false;
-    int selectedSourceRow = -1;
-    std::vector<novel::Chapter> chapters;
-    std::vector<novel::LineRange> excluded;
-    std::vector<novel::TextExclusion> exclusions;
-  };
   void buildUi();
   bool confirmDiscardChanges();
   QString recoveryFilePath() const;

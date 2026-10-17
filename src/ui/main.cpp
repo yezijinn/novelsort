@@ -132,12 +132,10 @@ int main(int argc, char** argv) {
   }
 
   ui::MainWindow window;
-
-  // 居中启动
-  const QRect avail = QApplication::desktop()->availableGeometry(&window);
-  window.move(avail.center() - QPoint(window.width() / 2, window.height() / 2));
-
+  // 居中必须在 resize 之后：构造时拿到的还是默认尺寸。
   window.show();
+  window.move(QApplication::desktop()->availableGeometry(&window).center() -
+              QPoint(window.width() / 2, window.height() / 2));
   window.activateWindow();
 
 #ifdef _WIN32
