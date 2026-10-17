@@ -1774,8 +1774,7 @@ void MainWindow::pushUndo() {
 }
 
 void MainWindow::applySnapshot(const Snapshot& snap) {
-  chapterModel_->chapters() = snap.chapters;
-  chapterModel_->refresh();
+  chapterModel_->resetChapters(snap.chapters);
   excludedRanges_ = snap.excluded;
   textExclusions_ = snap.exclusions;
 

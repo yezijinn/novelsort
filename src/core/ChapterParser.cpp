@@ -2,8 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstring>
-#include <set>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -15,6 +13,26 @@
 
 namespace novel {
 namespace {
+
+// 特殊章名与英文关键词：解析匹配（match_*）与两列拆分（split_heading_display）
+// 共用同一份词表，改词表即同时影响两边，靠 display_matches_parse 用例锁住一致性。
+constexpr std::string_view kSpecialWords[] = {
+    "番外篇", "外传篇", "序章", "序言", "序文", "序幕", "楔子", "引子",
+    "前言",   "尾声",   "终章", "后记", "番外", "外传", "前传", "后传",
+    "特典",   "附录",   "跋"};
+
+constexpr std::string_view kEnglishWords[] = {"chapter",  "episode",  "volume",
+                                              "part",     "book",     "prologue",
+                                              "epilogue", "ch.",      "ep.",
+                                              "vol."};
+
+// 英文数词：供数字记号消费。
+constexpr std::string_view kNumberWords[] = {
+    "one",  "two",  "three", "four",   "five",  "six",  "seven", "eight",
+    "nine", "ten",  "eleven", "twelve", "twenty", "thirty", "hundred"};
+
+// 与 kEnglishWords 一一对应的层级：1=卷/部/篇，2=章/节/话。
+constexpr int kEnglishLevels[] = {2, 2, 1, 1, 1, 2, 2, 2, 2, 1};
 
 constexpr char32_t kFullWidthSpace = 0x3000;
 
@@ -462,14 +480,9 @@ Match match_numbered(const std::string& core) {
 }
 
 Match match_special(const std::string& core) {
-  static const char* const kWords[] = {
-      "番外篇", "外传篇", "序章", "序言", "序文", "序幕", "楔子", "引子",
-      "前言",   "尾声",   "终章", "后记", "番外", "外传", "前传", "后传",
-      "特典",   "附录",   "跋"};
-  for (const char* word : kWords) {
-    const std::size_t word_len = std::strlen(word);
-    if (core.compare(0, word_len, word) != 0) continue;
-    std::size_t i = word_len;
+  for (const std::string_view word : kSpecialWords) {
+    if (core.compare(0, word.size(), word) != 0) continue;
+    std::size_t i = word.size();
     while (i < core.size()) {
       char32_t cp = 0;
       const std::size_t len = decode_cp(core, i, cp);
@@ -558,12 +571,8 @@ std::size_t consume_number_token(const std::string& s, std::size_t pos) {
     }
   }
 
-  static const char* const kWords[] = {
-      "one",   "two",   "three", "four",  "five",  "six",   "seven",
-      "eight", "nine",  "ten",   "eleven","twelve","twenty","thirty",
-      "hundred"};
-  for (const char* word : kWords) {
-    const std::size_t len = std::strlen(word);
+  for (const std::string_view word : kNumberWords) {
+    const std::size_t len = word.size();
     if (s.compare(pos, len, word) != 0) continue;
     const std::size_t after = pos + len;
     if (after < s.size() &&
@@ -577,19 +586,11 @@ std::size_t consume_number_token(const std::string& s, std::size_t pos) {
 
 Match match_english(const std::string& core) {
   const std::string low = ascii_lower(core);
-  struct Keyword {
-    const char* text;
-    int level;
-  };
-  static const Keyword kKeywords[] = {
-      {"chapter", 2},   {"episode", 2},  {"volume", 1},   {"part", 1},
-      {"book", 1},      {"prologue", 2}, {"epilogue", 2}, {"ch.", 2},
-      {"ep.", 2},       {"vol.", 1}};
-
-  for (const Keyword& kw : kKeywords) {
-    const std::size_t len = std::strlen(kw.text);
+  for (std::size_t k = 0; k < std::size(kEnglishWords); ++k) {
+    const std::string_view word = kEnglishWords[k];
+    const std::size_t len = word.size();
     if (low.size() < len) continue;
-    if (low.compare(0, len, kw.text) != 0) continue;
+    if (low.compare(0, len, word) != 0) continue;
     if (low.size() > len &&
         std::isalpha(static_cast<unsigned char>(low[len]))) {
       continue;
@@ -607,7 +608,7 @@ Match match_english(const std::string& core) {
         return {};
       }
     }
-    return make_match(kw.level, core, kEnglish);
+    return make_match(kEnglishLevels[k], core, kEnglish);
   }
   return {};
 }
@@ -1185,14 +1186,9 @@ void split_heading_display(const std::string& full_title, Chapter& chapter) {
   }
 
   // 2) 特殊章名，可带数字；序号列原样显示但不参与自动编号。
-  static const char* const kSpecialWords[] = {
-      "番外篇", "外传篇", "序章", "序言", "序文", "序幕", "楔子", "引子",
-      "前言",   "尾声",   "终章", "后记", "番外", "外传", "前传", "后传",
-      "特典",   "附录",   "跋"};
-  for (const char* word : kSpecialWords) {
-    const std::size_t word_len = std::strlen(word);
-    if (title.compare(0, word_len, word) != 0) continue;
-    std::size_t i = word_len;
+  for (const std::string_view word : kSpecialWords) {
+    if (title.compare(0, word.size(), word) != 0) continue;
+    std::size_t i = word.size();
     while (i < title.size()) {
       char32_t cp = 0;
       const std::size_t len = decode_cp(title, i, cp);
@@ -1206,11 +1202,8 @@ void split_heading_display(const std::string& full_title, Chapter& chapter) {
 
   // 3) 英文关键词 + 编号。
   const std::string low = ascii_lower(title);
-  static const char* const kEnglishWords[] = {
-      "chapter", "episode", "volume", "part",   "book",
-      "prologue", "epilogue", "ch.",   "ep.",    "vol."};
-  for (const char* word : kEnglishWords) {
-    const std::size_t len = std::strlen(word);
+  for (const std::string_view word : kEnglishWords) {
+    const std::size_t len = word.size();
     if (low.size() < len || low.compare(0, len, word) != 0) continue;
     if (low.size() > len &&
         std::isalpha(static_cast<unsigned char>(low[len]))) {
