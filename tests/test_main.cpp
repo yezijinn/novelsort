@@ -1818,6 +1818,50 @@ void test_columns_extra_body_stack() {
   CHECK_EQ(sorted_lines(after), sorted_lines(expected));
 }
 
+// 差分校验：对同一标题，split_heading_display 必须复现解析时的两列结果。
+// 解析语法与显示拆分目前各有实现，这条用例用来锁住它们不再各自漂移。
+void test_display_matches_parse() {
+  g_test = "display_matches_parse";
+  std::size_t files = 0;
+  const auto check_file = [&](const std::filesystem::path& path) {
+    const auto loaded = novel::load_text_file(path);
+    if (!loaded.ok) {
+      CHECK(loaded.ok);
+      return;
+    }
+    const auto parsed = novel::parse_chapters(loaded.text);
+    ++files;
+    for (const auto& chapter : parsed.chapters) {
+      novel::Chapter probe;
+      novel::split_heading_display(chapter.title, probe);
+      CHECK_EQ(probe.number, chapter.number);
+      CHECK_EQ(probe.name, chapter.name);
+      CHECK_EQ(probe.separator, chapter.separator);
+      CHECK_EQ(probe.numbered, chapter.numbered);
+    }
+  };
+
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(
+           data_path("stage2"))) {
+    if (!entry.is_regular_file()) continue;
+    if (entry.path().extension() != ".txt") continue;
+    check_file(entry.path());
+  }
+  for (const auto& entry :
+       std::filesystem::directory_iterator(data_path("real"))) {
+    if (!entry.is_regular_file()) continue;
+    if (entry.path().extension() != ".txt") continue;
+    check_file(entry.path());
+  }
+  for (const auto& entry :
+       std::filesystem::directory_iterator(data_path(""))) {
+    if (!entry.is_regular_file()) continue;
+    if (entry.path().extension() != ".txt") continue;
+    check_file(entry.path());
+  }
+  CHECK_EQ(files, static_cast<std::size_t>(133));
+}
+
 void test_columns_title_invariant() {
   g_test = "columns_title_invariant";
   std::size_t files = 0;
@@ -1932,6 +1976,7 @@ int main() {
       {"columns_extra_body", test_columns_extra_body},
       {"columns_extra_body_order", test_columns_extra_body_order},
       {"columns_extra_body_stack", test_columns_extra_body_stack},
+      {"display_matches_parse", test_display_matches_parse},
       {"columns_title_invariant", test_columns_title_invariant},
   };
 
