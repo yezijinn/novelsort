@@ -278,11 +278,6 @@ TextLoadResult fail_with(std::string message) {
   return result;
 }
 
-std::string path_to_utf8(const std::filesystem::path& path) {
-  const std::u8string value = path.u8string();
-  return std::string(value.begin(), value.end());
-}
-
 }  // namespace
 
 bool is_valid_utf8(std::string_view bytes) {

@@ -610,12 +610,6 @@ std::string format_parts_like(const NumberParts& parts, long long value) {
 }
 
 // ===== index 重排与 skip_lines 去重 =====
-void reindex(std::vector<Chapter>& chapters) {
-  for (std::size_t i = 0; i < chapters.size(); ++i) {
-    chapters[i].index = static_cast<int>(i);
-  }
-}
-
 void dedupe_skip_lines(std::vector<std::size_t>& lines) {
   std::sort(lines.begin(), lines.end());
   lines.erase(std::unique(lines.begin(), lines.end()), lines.end());
@@ -812,7 +806,7 @@ bool promote_to_numbering(std::vector<Chapter>& chapters, int index) {
     }
   }
 
-  reindex(chapters);
+  reindex_chapters(chapters);
   return true;
 }
 
@@ -855,7 +849,7 @@ bool merge_with_previous(std::vector<Chapter>& chapters, int index,
   dedupe_skip_lines(previous.skip_lines);
 
   chapters.erase(chapters.begin() + index);
-  reindex(chapters);
+  reindex_chapters(chapters);
   return true;
 }
 
@@ -880,7 +874,7 @@ bool delete_chapter(std::vector<Chapter>& chapters, int index,
   }
 
   chapters.erase(chapters.begin() + index);
-  reindex(chapters);
+  reindex_chapters(chapters);
   return true;
 }
 
@@ -899,7 +893,7 @@ bool split_chapter(std::vector<Chapter>& chapters, int index, std::size_t line,
   origin.end_line = line;
 
   chapters.insert(chapters.begin() + index + 1, std::move(fresh));
-  reindex(chapters);
+  reindex_chapters(chapters);
   return true;
 }
 
@@ -910,7 +904,7 @@ bool append_chapter(std::vector<Chapter>& chapters, std::size_t end_line,
   fresh.start_line = end_line;
   fresh.end_line = end_line;
   chapters.push_back(std::move(fresh));
-  reindex(chapters);
+  reindex_chapters(chapters);
   return true;
 }
 
@@ -1034,7 +1028,7 @@ bool split_chapter_numbered(std::vector<Chapter>& chapters, int index,
       bump_chapter_number(chapter);
     }
   }
-  reindex(chapters);
+  reindex_chapters(chapters);
   return true;
 }
 

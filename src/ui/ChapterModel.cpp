@@ -60,11 +60,7 @@ void ChapterModel::clear() {
   endResetModel();
 }
 
-void ChapterModel::renumber() {
-  for (std::size_t i = 0; i < chapters_.size(); ++i) {
-    chapters_[i].index = static_cast<int>(i);
-  }
-}
+void ChapterModel::renumber() { reindex_chapters(chapters_); }
 
 bool ChapterModel::moveRow(int from, int to) {
   const int n = static_cast<int>(chapters_.size());

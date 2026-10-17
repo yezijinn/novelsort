@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstddef>
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -37,5 +38,10 @@ std::vector<std::string_view> split_lines_view(std::string_view text);
 
 // 空行判定：trim 后为空。
 bool is_blank_line(std::string_view line);
+
+// 路径与 UTF-8 字符串互转。Windows 下 std::filesystem::path 原生宽字符，
+// 统一走这里，避免各模块各写一份 u8string 转换。
+std::string path_to_utf8(const std::filesystem::path& path);
+std::filesystem::path path_from_utf8(const std::string& text);
 
 }  // namespace novel

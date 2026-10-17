@@ -8,6 +8,7 @@
 #include "core/ChapterOrder.hpp"
 #include "core/ChapterParser.hpp"
 #include "core/TextFile.hpp"
+#include "core/TextUtf8.hpp"
 
 #ifdef _WIN32
 #ifndef WIN32_LEAN_AND_MEAN
@@ -48,9 +49,7 @@ void print_error(const std::string& message) {
   std::fputc('\n', stderr);
 }
 
-std::filesystem::path path_from_utf8(const std::string& text) {
-  return std::filesystem::path(std::u8string(text.begin(), text.end()));
-}
+
 
 bool parse_move(const std::string& text, std::pair<int, int>& move) {
   const std::size_t colon = text.find(':');
@@ -72,7 +71,7 @@ bool parse_move(const std::string& text, std::pair<int, int>& move) {
 }
 
 bool write_text_file(const std::string& path, const std::string& content) {
-  std::ofstream out(path_from_utf8(path), std::ios::binary | std::ios::trunc);
+  std::ofstream out(novel::path_from_utf8(path), std::ios::binary | std::ios::trunc);
   if (!out) return false;
   out.write(content.data(), static_cast<std::streamsize>(content.size()));
   out.flush();
@@ -139,7 +138,7 @@ int run(const std::vector<std::string>& args) {
   }
 
   const novel::TextLoadResult loaded =
-      novel::load_text_file(path_from_utf8(options.input));
+      novel::load_text_file(novel::path_from_utf8(options.input));
   if (!loaded.ok) {
     print_error(loaded.error);
     return kExitFile;

@@ -1,5 +1,6 @@
 #include "core/TextUtf8.hpp"
 
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -185,5 +186,14 @@ std::vector<std::string_view> split_lines_view(std::string_view text) {
 }
 
 bool is_blank_line(std::string_view line) { return trim_ws_view(line).empty(); }
+
+std::string path_to_utf8(const std::filesystem::path& path) {
+  const std::u8string value = path.u8string();
+  return std::string(value.begin(), value.end());
+}
+
+std::filesystem::path path_from_utf8(const std::string& text) {
+  return std::filesystem::path(std::u8string(text.begin(), text.end()));
+}
 
 }  // namespace novel

@@ -149,10 +149,14 @@ std::vector<Chapter> reorder_chapters(
     chapters.insert(chapters.begin() + (to - 1), std::move(chapter));
   }
 
+  reindex_chapters(chapters);
+  return chapters;
+}
+
+void reindex_chapters(std::vector<Chapter>& chapters) {
   for (std::size_t i = 0; i < chapters.size(); ++i) {
     chapters[i].index = static_cast<int>(i);
   }
-  return chapters;
 }
 
 std::string render_txt(const std::string& original_utf8,

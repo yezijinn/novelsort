@@ -48,4 +48,7 @@ struct Chapter {
   std::vector<LineRange> extra_body;
 };
 
+// 按当前顺序重写 index 字段。移动 / 插入 / 删除后必须调用，否则 index 与下标脱节。
+void reindex_chapters(std::vector<Chapter>& chapters);
+
 }  // namespace novel

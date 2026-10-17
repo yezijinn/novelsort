@@ -14,16 +14,10 @@
 #include <string_view>
 
 #include "ui/MainWindow.hpp"
+#include "core/TextUtf8.hpp"
 #include "ui/Theme.hpp"
 
 namespace {
-std::filesystem::path fromUtf8(const std::string& s) {
-  return std::filesystem::path(std::u8string(s.begin(), s.end()));
-}
-std::string toUtf8(const std::filesystem::path& p) {
-  const std::u8string u = p.u8string();
-  return std::string(u.begin(), u.end());
-}
 
 bool is_batch_mode(int argc, char** argv) {
   for (int i = 1; i < argc; ++i) {
@@ -126,8 +120,8 @@ int main(int argc, char** argv) {
     }
     ui::MainWindow window;
     const int failures = window.runSelfTest(
-        fromUtf8(input.toStdString()),
-        toUtf8(fromUtf8(selftest.toStdString())));
+        novel::path_from_utf8(input.toStdString()),
+        novel::path_to_utf8(novel::path_from_utf8(selftest.toStdString())));
     return failures == 0 ? 0 : 1;
   }
 
@@ -148,7 +142,7 @@ int main(int argc, char** argv) {
   if (!input.isEmpty() && !recovered) {
     QApplication::setOverrideCursor(Qt::WaitCursor);
     QApplication::processEvents();
-    window.loadFile(fromUtf8(input.toStdString()), /*silent=*/false);
+    window.loadFile(novel::path_from_utf8(input.toStdString()), /*silent=*/false);
     QApplication::restoreOverrideCursor();
   }
 

@@ -190,15 +190,6 @@ class ScopedWaitCursor {
   bool active_ = true;
 };
 
-std::filesystem::path fromUtf8(const std::string& s) {
-  return std::filesystem::path(std::u8string(s.begin(), s.end()));
-}
-
-std::string toUtf8(const std::filesystem::path& p) {
-  const std::u8string u = p.u8string();
-  return std::string(u.begin(), u.end());
-}
-
 // string_view 转 QString（UTF-8），零拷贝，不先拷成 std::string。
 QString qs(std::string_view s) {
   return QString::fromUtf8(s.data(), static_cast<int>(s.size()));
@@ -1023,7 +1014,7 @@ void MainWindow::loadFile(const std::filesystem::path& path, bool silent) {
   rebuildLossyLines();
   currentFile_ = path;
   if (fileLabel_) {
-    const QString displayPath = QString::fromStdString(toUtf8(path));
+    const QString displayPath = QString::fromStdString(novel::path_to_utf8(path));
     fileLabel_->setText(QFileInfo(displayPath).fileName());
     fileLabel_->setToolTip(QDir::toNativeSeparators(displayPath));
   }
@@ -1094,7 +1085,7 @@ void MainWindow::onOpenClicked() {
   statusLabel_->setText(QStringLiteral("正在打开：") + path);
   QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
   ScopedWaitCursor wait;
-  loadFile(fromUtf8(path.toStdString()));
+  loadFile(novel::path_from_utf8(path.toStdString()));
 }
 
 void MainWindow::previewSourceRow(int sourceRow) {
@@ -1416,7 +1407,7 @@ void MainWindow::updateChips() {
 
 void MainWindow::updateStatusBar() {
   if (isLoaded_) {
-    statusLabel_->setText(QString::fromStdString(toUtf8(currentFile_)));
+    statusLabel_->setText(QString::fromStdString(novel::path_to_utf8(currentFile_)));
 
     metaChip_->setText(QStringLiteral("编码 ") +
                        QString::fromStdString(loadedEncoding_));
@@ -2628,7 +2619,7 @@ void MainWindow::onSplitHere() {
 bool MainWindow::exportContent(bool json) {
   if (!isLoaded_) return false;
 
-  const QString sourcePath = QString::fromStdString(toUtf8(currentFile_));
+  const QString sourcePath = QString::fromStdString(novel::path_to_utf8(currentFile_));
   const QFileInfo fi(sourcePath);
   const QString base = fi.completeBaseName().isEmpty()
  ? QStringLiteral("book")
@@ -2693,7 +2684,7 @@ bool MainWindow::exportContent(bool json) {
 
   const std::string content =
       json ? novel::directory_json(
-                 novel::DirectoryJsonInput{toUtf8(currentFile_),
+                 novel::DirectoryJsonInput{novel::path_to_utf8(currentFile_),
                                            loadedEncoding_,
                                            &chapterModel_->chapters(),
                                            &tocLines_, &warnings_})
@@ -2793,7 +2784,7 @@ void MainWindow::scheduleRecoveryBackup() {
 
 bool MainWindow::writeRecoveryBackup() {
   if (!recoveryEnabled_ || recovering_ || !isLoaded_ || !dirty_) return false;
-  const QString sourcePath = QString::fromStdString(toUtf8(currentFile_));
+  const QString sourcePath = QString::fromStdString(novel::path_to_utf8(currentFile_));
   const QFileInfo sourceInfo(sourcePath);
   if (!sourceInfo.exists()) return false;
 
@@ -2873,7 +2864,7 @@ bool MainWindow::tryRecoverBackup() {
   }
 
   novel::TextLoadResult loaded =
-      novel::load_text_file(fromUtf8(backup.sourcePath.toStdString()));
+      novel::load_text_file(novel::path_from_utf8(backup.sourcePath.toStdString()));
   if (!loaded.ok) {
     show_warning_message(this, QStringLiteral("恢复失败"),
                          QString::fromStdString(loaded.error));
@@ -2886,7 +2877,7 @@ bool MainWindow::tryRecoverBackup() {
   encodingWarnings_ = loaded.warnings;
   warnings_ = encodingWarnings_;
   warningBannerDismissed_ = false;
-  currentFile_ = fromUtf8(backup.sourcePath.toStdString());
+  currentFile_ = novel::path_from_utf8(backup.sourcePath.toStdString());
   lines_ = novel::split_lines_view(loadedText_);
   rebuildLossyLines();
 
@@ -2968,7 +2959,7 @@ void MainWindow::dropEvent(QDropEvent* event) {
   statusLabel_->setText(QStringLiteral("正在打开：") + path);
   QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
   ScopedWaitCursor wait;
-  loadFile(fromUtf8(path.toStdString()));
+  loadFile(novel::path_from_utf8(path.toStdString()));
   event->acceptProposedAction();
 }
 
@@ -3186,7 +3177,7 @@ int MainWindow::runSelfTest(const std::filesystem::path& path,
           "path=" + txtOut + " size=" + std::to_string(txt.size()));
   }
   const std::string js =
-      novel::directory_json(novel::DirectoryJsonInput{toUtf8(path),
+      novel::directory_json(novel::DirectoryJsonInput{novel::path_to_utf8(path),
                                                       loadedEncoding_, &chs,
                                                       &tocLines_, &warnings_});
   {
