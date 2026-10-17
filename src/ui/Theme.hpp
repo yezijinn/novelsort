@@ -18,6 +18,9 @@ struct Colors {
   QColor accentBg;    // 强调底（选中行）
   QColor invalid;     // 无效内容
   QColor warning;     // 警告
+  QColor caption;     // Windows 标题栏底色
+  QColor captionText; // Windows 标题栏文字
+  QColor captionBorder;  // 窗口边框
 };
 
 extern Colors C;

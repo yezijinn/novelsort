@@ -43,6 +43,9 @@ const Colors kLight = {
     QColor(0xE8, 0xF0, 0xFF),  // accentBg
     QColor(0xC2, 0x41, 0x0C),  // invalid
     QColor(0xB4, 0x53, 0x09),  // warning
+    QColor(0xF6, 0xF7, 0xF9),  // caption
+    QColor(0x1B, 0x24, 0x30),  // captionText
+    QColor(0xDC, 0xE2, 0xEA),  // captionBorder
 };
 
 // 深色配色（沿用现有）。
@@ -57,6 +60,9 @@ const Colors kDark = {
     QColor(0x1B, 0x27, 0x40),  // accentBg
     QColor(0xF0, 0x80, 0x5A),  // invalid
     QColor(0xF0, 0xB2, 0x67),  // warning
+    QColor(0x11, 0x15, 0x1D),  // caption
+    QColor(0xE8, 0xEC, 0xF3),  // captionText
+    QColor(0x23, 0x2A, 0x36),  // captionBorder
 };
 
 }  // namespace
@@ -361,12 +367,12 @@ void applyWindowsFrame(WId wid, bool dark) {
   DwmSetWindowAttribute(hwnd, 19, &value, sizeof(value));
 
   // Windows 11：显式设置标题栏底色/文字色，避免切回亮色后仍保留系统深色。
-  const COLORREF caption =
-      dark ? RGB(0x11, 0x15, 0x1D) : RGB(0xF6, 0xF7, 0xF9);
+  // 取自当前主题配色，避免同一组颜色在两处各写一份。
+  const COLORREF caption = RGB(C.caption.red(), C.caption.green(), C.caption.blue());
   const COLORREF captionText =
-      dark ? RGB(0xE8, 0xEC, 0xF3) : RGB(0x1B, 0x24, 0x30);
+      RGB(C.captionText.red(), C.captionText.green(), C.captionText.blue());
   const COLORREF border =
-      dark ? RGB(0x23, 0x2A, 0x36) : RGB(0xDC, 0xE2, 0xEA);
+      RGB(C.captionBorder.red(), C.captionBorder.green(), C.captionBorder.blue());
   DwmSetWindowAttribute(hwnd, 35, &caption, sizeof(caption));
   DwmSetWindowAttribute(hwnd, 36, &captionText, sizeof(captionText));
   DwmSetWindowAttribute(hwnd, 34, &border, sizeof(border));
