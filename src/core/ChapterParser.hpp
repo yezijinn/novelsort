@@ -27,9 +27,9 @@ ParseResult parse_chapters(std::string_view utf8_text,
 // 只写这三列与 numbered，不动 title；解析与编辑（改名/重编号/拆分）共用。
 void split_heading_display(const std::string& full_title, Chapter& chapter);
 
-// Shared text helpers (also used by the renderer).
+// 共享文本辅助函数（渲染器也使用）。
 std::vector<std::string> split_lines(std::string_view text);
-// Zero-copy variant: views point into `text`, valid as long as it outlives them.
+// 零拷贝版本：视图指向 `text`，调用方必须保证其生命周期覆盖视图。
 std::vector<std::string_view> split_lines_view(std::string_view text);
 bool is_blank_line(std::string_view line);
 
