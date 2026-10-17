@@ -10,116 +10,12 @@
 #include <vector>
 
 #include "core/ChapterParser.hpp"
+#include "core/TextUtf8.hpp"
 
 namespace novel {
 namespace {
 
-// ---------------------------------------------------------------------------
-// UTF-8 helpers
-// ---------------------------------------------------------------------------
-std::size_t decode_cp(std::string_view s, std::size_t i, char32_t& cp) {
-  const auto* bytes = reinterpret_cast<const unsigned char*>(s.data());
-  const unsigned char first = bytes[i];
-  if (first < 0x80) {
-    cp = first;
-    return 1;
-  }
-  if ((first & 0xE0) == 0xC0 && i + 1 < s.size()) {
-    cp = (static_cast<char32_t>(first & 0x1F) << 6) |
-         static_cast<char32_t>(bytes[i + 1] & 0x3F);
-    return 2;
-  }
-  if ((first & 0xF0) == 0xE0 && i + 2 < s.size()) {
-    cp = (static_cast<char32_t>(first & 0x0F) << 12) |
-         (static_cast<char32_t>(bytes[i + 1] & 0x3F) << 6) |
-         static_cast<char32_t>(bytes[i + 2] & 0x3F);
-    return 3;
-  }
-  if ((first & 0xF8) == 0xF0 && i + 3 < s.size()) {
-    cp = (static_cast<char32_t>(first & 0x07) << 18) |
-         (static_cast<char32_t>(bytes[i + 1] & 0x3F) << 12) |
-         (static_cast<char32_t>(bytes[i + 2] & 0x3F) << 6) |
-         static_cast<char32_t>(bytes[i + 3] & 0x3F);
-    return 4;
-  }
-  cp = first;
-  return 1;
-}
-
-void append_utf8(std::string& out, char32_t cp) {
-  if (cp < 0x80) {
-    out.push_back(static_cast<char>(cp));
-  } else if (cp < 0x800) {
-    out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
-    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-  } else if (cp < 0x10000) {
-    out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
-    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-  } else {
-    out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
-    out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-  }
-}
-
-bool is_space_cp(char32_t cp) {
-  switch (cp) {
-    case U' ':
-    case U'\t':
-    case U'\r':
-    case U'\n':
-    case U'\v':
-    case U'\f':
-    case 0x00A0:
-    case 0x1680:
-    case 0x2000:
-    case 0x2001:
-    case 0x2002:
-    case 0x2003:
-    case 0x2004:
-    case 0x2005:
-    case 0x2006:
-    case 0x2007:
-    case 0x2008:
-    case 0x2009:
-    case 0x200A:
-    case 0x200B:
-    case 0x2028:
-    case 0x2029:
-    case 0x202F:
-    case 0x205F:
-    case 0x3000:
-    case 0xFEFF:
-      return true;
-    default:
-      return false;
-  }
-}
-
-std::string trim_ws(std::string_view s) {
-  std::size_t begin = 0;
-  while (begin < s.size()) {
-    char32_t cp = 0;
-    const std::size_t len = decode_cp(s, begin, cp);
-    if (!is_space_cp(cp)) break;
-    begin += len;
-  }
-  std::size_t last_end = begin;
-  std::size_t i = begin;
-  while (i < s.size()) {
-    char32_t cp = 0;
-    const std::size_t len = decode_cp(s, i, cp);
-    if (!is_space_cp(cp)) last_end = i + len;
-    i += len;
-  }
-  if (last_end <= begin) return {};
-  return std::string(s.substr(begin, last_end - begin));
-}
-
-// Heading text given by the user may carry Markdown marks; keep them in
-// heading_line but not in title.
+// 输入标题可能带 Markdown 井号：井号只保留在 heading_line，不进 title。
 std::string strip_heading_marks(std::string_view text) {
   std::size_t i = 0;
   while (i < text.size() && text[i] == '#') ++i;
@@ -128,9 +24,7 @@ std::string strip_heading_marks(std::string_view text) {
   return std::string(text.substr(i));
 }
 
-// ---------------------------------------------------------------------------
-// Chinese numerals
-// ---------------------------------------------------------------------------
+// ===== 中文数字 =====
 int digit_of(char32_t cp) {
   if (cp >= U'0' && cp <= U'9') return static_cast<int>(cp - U'0');
   if (cp >= 0xFF10 && cp <= 0xFF19) return static_cast<int>(cp - 0xFF10);
@@ -307,9 +201,7 @@ std::string format_chinese(long long n) {
   return std::to_string(n);  // 超出常见章节范围：退化为阿拉伯数字
 }
 
-// ---------------------------------------------------------------------------
-// 序号列解析与格式化
-// ---------------------------------------------------------------------------
+// ===== 序号列解析与格式化 =====
 bool is_arabic_digit(char32_t cp) {
   return (cp >= U'0' && cp <= U'9') || (cp >= 0xFF10 && cp <= 0xFF19);
 }
@@ -711,9 +603,7 @@ std::string format_parts_like(const NumberParts& parts, long long value) {
   return parts.head + digits + parts.tail;
 }
 
-// ---------------------------------------------------------------------------
-// index 重排与 skip_lines 去重
-// ---------------------------------------------------------------------------
+// ===== index 重排与 skip_lines 去重 =====
 void reindex(std::vector<Chapter>& chapters) {
   for (std::size_t i = 0; i < chapters.size(); ++i) {
     chapters[i].index = static_cast<int>(i);
@@ -1168,7 +1058,7 @@ bool move_body_to_previous(std::vector<Chapter>& chapters, int index) {
   dedupe_skip_lines(previous.skip_lines);
 
   current.end_line = (current.inserted || current.synthetic)
-                         ? current.start_line
+ ? current.start_line
                          : current.start_line + 1;
   current.extra_body.clear();
   return true;
@@ -1198,7 +1088,7 @@ bool move_body_to_next(std::vector<Chapter>& chapters, int index) {
   next.extra_body.insert(next.extra_body.begin(), moved.begin(), moved.end());
   normalize_extra_body(next.extra_body);
   current.end_line = (current.inserted || current.synthetic)
-                         ? current.start_line
+ ? current.start_line
                          : current.start_line + 1;
   current.extra_body.clear();
   return true;

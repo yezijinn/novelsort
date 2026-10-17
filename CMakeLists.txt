@@ -12,6 +12,7 @@ endif()
 
 add_library(novel_core STATIC
   src/core/TextFile.cpp
+  src/core/TextUtf8.cpp
   src/core/ChapterParser.cpp
   src/core/ChapterOrder.cpp
   src/core/DirectoryEdit.cpp

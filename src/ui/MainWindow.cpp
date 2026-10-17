@@ -1,4 +1,4 @@
-﻿#include "ui/MainWindow.hpp"
+#include "ui/MainWindow.hpp"
 
 #include <QAbstractItemView>
 #include <QAction>
@@ -202,7 +202,7 @@ std::string toUtf8(const std::filesystem::path& p) {
   return std::string(u.begin(), u.end());
 }
 
-// string_view → QString（UTF-8），零拷贝避免先拷成 std::string。
+// string_view 转 QString（UTF-8），零拷贝，不先拷成 std::string。
 QString qs(std::string_view s) {
   return QString::fromUtf8(s.data(), static_cast<int>(s.size()));
 }
@@ -1731,9 +1731,7 @@ void MainWindow::onAcceptUnnumberedToggled(bool checked) {
   updateStatusBar();
 }
 
-// ---------------------------------------------------------------------------
-// 撤销 / 重做
-// ---------------------------------------------------------------------------
+// ===== 撤销 / 重做 =====
 std::size_t MainWindow::snapshotBytes(const Snapshot& snap) {
   std::size_t bytes = sizeof(Snapshot);
   bytes += snap.chapters.capacity() * sizeof(novel::Chapter);
@@ -1844,9 +1842,7 @@ void MainWindow::redo() {
   updateControls();
 }
 
-// ---------------------------------------------------------------------------
-// 修改状态
-// ---------------------------------------------------------------------------
+// ===== 修改状态 =====
 void MainWindow::setDirty(bool dirty) {
   dirty_ = dirty;
   if (dirty_) {
@@ -1860,9 +1856,7 @@ void MainWindow::setDirty(bool dirty) {
 
 void MainWindow::markEdited() { setDirty(true); }
 
-// ---------------------------------------------------------------------------
-// 编辑操作
-// ---------------------------------------------------------------------------
+// ===== 编辑操作 =====
 const novel::Chapter* MainWindow::currentChapter() const {
   const int src = currentSourceRow();
   if (src < 0) return nullptr;
@@ -2007,7 +2001,7 @@ void MainWindow::applyExclusionFormats(const QVector<int>& sourceToBlock) {
   for (const novel::TextExclusion& e : textExclusions_) {
     if (e.begin_byte >= e.end_byte) continue;
     const int blk = (e.line < static_cast<std::size_t>(sourceToBlock.size()))
-                        ? sourceToBlock[static_cast<int>(e.line)]
+ ? sourceToBlock[static_cast<int>(e.line)]
                         : -1;
     if (blk < 0) continue;  // 不在当前预览
     byLine[e.line].emplace_back(e.begin_byte, e.end_byte);
@@ -2045,11 +2039,11 @@ void MainWindow::applyExclusionFormats(const QVector<int>& sourceToBlock) {
   }
 }
 
-// 选中预览文本 → 右键「设置为无效内容」：把每一行选中区间转成 TextExclusion。
+// 预览选中文本后右键「设置为无效内容」：每行选中区间转成 TextExclusion。
 void MainWindow::onSetInvalid() {
   if (!isLoaded_) return;
   QTextCursor cur = pendingInvalidSelection_.hasSelection()
-                        ? pendingInvalidSelection_
+ ? pendingInvalidSelection_
                         : previewEdit_->textCursor();
   pendingInvalidSelection_ = QTextCursor();
   if (!cur.hasSelection()) return;
@@ -2367,9 +2361,7 @@ void MainWindow::renumberDialog() {
 
 void MainWindow::onRenumber() { renumberDialog(); }
 
-// ---------------------------------------------------------------------------
-// 拖拽排序
-// ---------------------------------------------------------------------------
+// ===== 拖拽排序 =====
 void MainWindow::onRowDropped(int fromRow, int toRow) {
   const int n = static_cast<int>(chapterModel_->chapters().size());
   if (fromRow < 0 || fromRow >= proxy_->rowCount()) return;
@@ -2405,9 +2397,7 @@ void MainWindow::onRowDropped(int fromRow, int toRow) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 右键菜单
-// ---------------------------------------------------------------------------
+// ===== 右键菜单 =====
 QMenu* MainWindow::buildChapterMenu(bool onItem, int row) {
   QMenu* menu = new QMenu(this);
   if (!onItem) return menu;
@@ -2498,7 +2488,7 @@ QDialog* MainWindow::buildSplitDialog(const novel::Chapter& ch,
 
   QLabel* hint = new QLabel(
       fields.autoNumber
-          ? QStringLiteral("从光标所在行起划入新章。当前章有编号，新章序号自动按"
+ ? QStringLiteral("从光标所在行起划入新章。当前章有编号，新章序号自动按"
                            "当前序号 +1 生成，后续章节依次后移。")
           : QStringLiteral("从光标所在行起划入新章。当前章没有可递增序号；"
                            "可勾选「新章节参与排序」并填写序号，后续章节自动后移；"
@@ -2615,7 +2605,7 @@ void MainWindow::onSplitHere() {
       (fields.participate != nullptr && fields.participate->isChecked());
   const QString number =
       fields.autoNumber
-          ? QString()
+ ? QString()
           : (participate ? fields.number->text().trimmed() : QString());
   const QString name = fields.name->text().trimmed();
   dlg->deleteLater();
@@ -2638,16 +2628,14 @@ void MainWindow::onSplitHere() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 导出
-// ---------------------------------------------------------------------------
+// ===== 导出 =====
 bool MainWindow::exportContent(bool json) {
   if (!isLoaded_) return false;
 
   const QString sourcePath = QString::fromStdString(toUtf8(currentFile_));
   const QFileInfo fi(sourcePath);
   const QString base = fi.completeBaseName().isEmpty()
-                           ? QStringLiteral("book")
+ ? QStringLiteral("book")
                            : fi.completeBaseName();
   const QString suffix = json ? QStringLiteral(".json") : QStringLiteral(".txt");
   const QString filter = json ? QStringLiteral("JSON 文件 (*.json)")
@@ -3230,7 +3218,7 @@ int MainWindow::runSelfTest(const std::filesystem::path& path,
   check("撤销快照已计字节",
         !undoStack_.empty() && undoStack_.back().bytes > 0,
         "bytes=" + std::to_string(undoStack_.empty()
-                                      ? 0
+ ? 0
                                       : undoStack_.back().bytes));
   novel::rename_chapter(chs[1], "第二章 初遇之夜");
   check("改名第2章", chs[1].title == "第二章 初遇之夜",
@@ -3305,7 +3293,7 @@ int MainWindow::runSelfTest(const std::filesystem::path& path,
     check("重编号生效", found, "chapters[0].title=" + chs[0].title);
   }
 
-  // 7b. 撤销两次 → 回到末尾新增前（章数 -1），再重做两次 → 回到重编号后
+  // 7b. 撤销两次回到末尾新增前（章数 -1），再重做两次回到重编号后
   const std::size_t afterRenum = sizeOf();
   undo();
   undo();
@@ -3643,9 +3631,7 @@ int MainWindow::runSelfTest(const std::filesystem::path& path,
   return failures;
 }
 
-// ---------------------------------------------------------------------------
-// 截图模式（开发用）
-// ---------------------------------------------------------------------------
+// ===== 截图模式（开发用） =====
 
 
 }  // namespace ui

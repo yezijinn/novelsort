@@ -1,4 +1,4 @@
-#include <algorithm>
+﻿#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <string>
@@ -524,7 +524,7 @@ void test_prose_after_separator() {
 
 void test_title_punctuation_regression() {
   g_test = "title_punctuation_regression";
-  // Real headings may use exclamation marks inside the title.
+  // 真实标题内部可以带感叹号。
   const auto exclaim = novel::parse_chapters("第139章 劝架！劝人吵架！\n\n正文。\n");
   CHECK_EQ(exclaim.chapters.size(), static_cast<std::size_t>(1));
   if (!exclaim.chapters.empty()) {
@@ -535,11 +535,11 @@ void test_title_punctuation_regression() {
       novel::parse_chapters("第270章 官宣！（全书完）\n\n正文。\n");
   CHECK_EQ(annotation.chapters.size(), static_cast<std::size_t>(1));
 
-  // The numbering marker is not a sentence boundary.
+  // 编号标记不是句子边界。
   const auto fullwidth_dot = novel::parse_chapters("1．启程\n\n正文。\n");
   CHECK_EQ(fullwidth_dot.chapters.size(), static_cast<std::size_t>(1));
 
-  // A real second sentence after 。 is still prose.
+  // 「。」之后的第二句仍是正文。
   const auto prose = novel::parse_chapters(
       "第一章 正文\n\n第一章：启程。这句话出现在正文里。\n\n第二章 继续\n\n内容。\n");
   CHECK_EQ(prose.chapters.size(), static_cast<std::size_t>(2));
@@ -625,9 +625,7 @@ void test_title_lines_rejects_english_prose() {
   }
 }
 
-// ---------------------------------------------------------------------------
-// 章节目录编辑
-// ---------------------------------------------------------------------------
+// ===== 章节目录编辑 =====
 int chapter_index_of(const novel::ParseResult& parsed,
                      const std::string& title) {
   for (std::size_t i = 0; i < parsed.chapters.size(); ++i) {
@@ -1142,9 +1140,7 @@ void test_invalid_content_with_edits() {
   CHECK(legacy.find("第二段乙。") != std::string::npos);
 }
 
-// ---------------------------------------------------------------------------
-// 章节序号列 / 标题列
-// ---------------------------------------------------------------------------
+// ===== 章节序号列 / 标题列 =====
 void test_columns_parse_split() {
   g_test = "columns_parse_split";
   const std::string text =
@@ -1744,7 +1740,7 @@ void test_columns_extra_body_order() {
   CHECK_EQ(parsed.chapters.size(), static_cast<std::size_t>(3));
   if (parsed.chapters.size() != 3) return;
 
-  // 先甲→乙，再乙→丙：丙里的 extra_body 必须仍按源行顺序（甲一、乙一），
+  // 先把甲划给乙，再把乙划给丙：丙里的 extra_body 必须仍按源行顺序，
   // 不能因为后一次插入而倒序。
   CHECK(novel::move_body_to_next(parsed.chapters, 0));
   CHECK(novel::move_body_to_next(parsed.chapters, 1));

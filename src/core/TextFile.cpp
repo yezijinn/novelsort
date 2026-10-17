@@ -1,4 +1,6 @@
-﻿#include "core/TextFile.hpp"
+#include "core/TextFile.hpp"
+
+#include "core/TextUtf8.hpp"
 
 #include <algorithm>
 #include <cstdint>
@@ -21,26 +23,6 @@ namespace novel {
 namespace {
 
 constexpr std::string_view kAttempts = "已尝试 BOM / UTF-8 / GB18030";
-
-std::string utf8_encode(char32_t cp) {
-  std::string out;
-  if (cp <= 0x7F) {
-    out.push_back(static_cast<char>(cp));
-  } else if (cp <= 0x7FF) {
-    out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
-    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-  } else if (cp <= 0xFFFF) {
-    out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
-    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-  } else {
-    out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
-    out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-  }
-  return out;
-}
 
 constexpr std::string_view kReplacement = "\xEF\xBF\xBD";
 
@@ -122,24 +104,24 @@ bool utf16_to_utf8(const char* data, std::size_t size, bool little_endian,
     const auto b0 = static_cast<unsigned char>(data[i]);
     const auto b1 = static_cast<unsigned char>(data[i + 1]);
     char32_t unit = little_endian
-                        ? static_cast<char32_t>(b0 | (b1 << 8))
+ ? static_cast<char32_t>(b0 | (b1 << 8))
                         : static_cast<char32_t>((b0 << 8) | b1);
     if (unit >= 0xD800 && unit <= 0xDBFF) {
       if (i + 3 >= size) return false;
       const auto c0 = static_cast<unsigned char>(data[i + 2]);
       const auto c1 = static_cast<unsigned char>(data[i + 3]);
       const char32_t low = little_endian
-                               ? static_cast<char32_t>(c0 | (c1 << 8))
+ ? static_cast<char32_t>(c0 | (c1 << 8))
                                : static_cast<char32_t>((c0 << 8) | c1);
       if (low < 0xDC00 || low > 0xDFFF) return false;
       const char32_t cp =
           0x10000 + ((unit - 0xD800) << 10) + (low - 0xDC00);
-      out += utf8_encode(cp);
+      append_utf8(out, cp);
       i += 2;
     } else if (unit >= 0xDC00 && unit <= 0xDFFF) {
       return false;
     } else {
-      out += utf8_encode(unit);
+      append_utf8(out, unit);
     }
   }
   return true;

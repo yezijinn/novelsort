@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "core/TextFile.hpp"
+#include "core/TextUtf8.hpp"
 
 namespace novel {
 namespace {
@@ -42,110 +43,6 @@ bool is_separator_cp(char32_t cp) {
   }
 }
 
-std::size_t decode_cp(std::string_view s, std::size_t i, char32_t& cp) {
-  if (i >= s.size()) {
-    cp = 0;
-    return 0;
-  }
-  const auto c = static_cast<unsigned char>(s[i]);
-  if (c < 0x80) {
-    cp = c;
-    return 1;
-  }
-  std::size_t len = 0;
-  char32_t value = 0;
-  if ((c & 0xE0) == 0xC0) {
-    len = 2;
-    value = static_cast<char32_t>(c & 0x1F);
-  } else if ((c & 0xF0) == 0xE0) {
-    len = 3;
-    value = static_cast<char32_t>(c & 0x0F);
-  } else if ((c & 0xF8) == 0xF0) {
-    len = 4;
-    value = static_cast<char32_t>(c & 0x07);
-  } else {
-    cp = 0xFFFD;
-    return 1;
-  }
-  if (i + len > s.size()) {
-    cp = 0xFFFD;
-    return 1;
-  }
-  for (std::size_t k = 1; k < len; ++k) {
-    const auto cc = static_cast<unsigned char>(s[i + k]);
-    if ((cc & 0xC0) != 0x80) {
-      cp = 0xFFFD;
-      return 1;
-    }
-    value = (value << 6) | static_cast<char32_t>(cc & 0x3F);
-  }
-  cp = value;
-  return len;
-}
-
-std::vector<char32_t> to_cps(std::string_view s) {
-  std::vector<char32_t> out;
-  out.reserve(s.size());
-  std::size_t i = 0;
-  while (i < s.size()) {
-    char32_t cp = 0;
-    const std::size_t len = decode_cp(s, i, cp);
-    out.push_back(cp);
-    i += len;
-  }
-  return out;
-}
-
-void append_utf8(std::string& out, char32_t cp) {
-  if (cp <= 0x7F) {
-    out.push_back(static_cast<char>(cp));
-  } else if (cp <= 0x7FF) {
-    out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
-    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-  } else if (cp <= 0xFFFF) {
-    out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
-    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-  } else {
-    out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
-    out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
-    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
-  }
-}
-
-std::string from_cps(const std::vector<char32_t>& cps) {
-  std::string out;
-  out.reserve(cps.size() * 3);
-  for (char32_t cp : cps) append_utf8(out, cp);
-  return out;
-}
-
-std::string_view trim_ws_view(std::string_view s) {
-  std::size_t begin = 0;
-  std::size_t end = s.size();
-  while (begin < end) {
-    char32_t cp = 0;
-    const std::size_t len = decode_cp(s, begin, cp);
-    if (!is_ws_cp(cp)) break;
-    begin += len;
-  }
-  while (end > begin) {
-    // Step back to the start of the previous code point.
-    std::size_t pos = end - 1;
-    while (pos > begin && (static_cast<unsigned char>(s[pos]) & 0xC0) == 0x80) {
-      --pos;
-    }
-    char32_t cp = 0;
-    decode_cp(s, pos, cp);
-    if (!is_ws_cp(cp)) break;
-    end = pos;
-  }
-  return s.substr(begin, end - begin);
-}
-
-std::string trim_ws(std::string_view s) { return std::string(trim_ws_view(s)); }
-
 std::string collapse_ws(std::string_view s) {
   std::string out;
   out.reserve(s.size());
@@ -166,30 +63,24 @@ std::string collapse_ws(std::string_view s) {
   return out;
 }
 
-std::size_t cp_count(std::string_view s) {
-  std::size_t count = 0;
-  std::size_t i = 0;
-  while (i < s.size()) {
+// 码点向量：剥离装饰符需逐码点改写，无法在 string_view 上原地完成。
+std::vector<char32_t> to_cps(std::string_view s) {
+  std::vector<char32_t> out;
+  out.reserve(s.size());
+  for (std::size_t i = 0; i < s.size();) {
     char32_t cp = 0;
-    i += decode_cp(s, i, cp);
-    ++count;
+    const std::size_t len = decode_cp(s, i, cp);
+    out.push_back(cp);
+    i += len;
   }
-  return count;
+  return out;
 }
 
-char32_t first_cp(std::string_view s) {
-  char32_t cp = 0;
-  decode_cp(s, 0, cp);
-  return cp;
-}
-
-char32_t last_cp(std::string_view s) {
-  if (s.empty()) return 0;
-  std::size_t pos = s.size() - 1;
-  while (pos > 0 && (static_cast<unsigned char>(s[pos]) & 0xC0) == 0x80) --pos;
-  char32_t cp = 0;
-  decode_cp(s, pos, cp);
-  return cp;
+std::string from_cps(const std::vector<char32_t>& cps) {
+  std::string out;
+  out.reserve(cps.size() * 3);
+  for (char32_t cp : cps) append_utf8(out, cp);
+  return out;
 }
 
 bool is_letter_or_han(char32_t cp) {
@@ -288,8 +179,8 @@ bool is_sentence_end(char32_t cp) {
   }
 }
 
-// Sentence-final marks that turn a heading into prose when followed by text.
-// `！`/`？`/`…` are deliberately excluded: real titles use them freely
+// 句末标点：其后还有内容时，标题应判为正文。
+// `！` / `？` / `…` 刻意排除：真实标题常用，不能据此判为正文。
 // (``第270章 官宣！（全书完）``, ``第139章 劝架！劝人吵架！``).
 bool is_hard_sentence_end(char32_t cp) {
   switch (cp) {
@@ -332,8 +223,8 @@ bool has_embedded_sentence_end(std::string_view s) {
     }
     const std::string tail = trim_ws(rest.substr(j));
     if (tail.empty()) continue;
-    // Only closing punctuation or a trailing annotation (``（全书完）``)
-    // may follow; anything else means a second sentence.
+    // 其后只允许收尾标点或尾注（如「（全书完）」）；
+    // 否则视为第二句。
     if (!has_letter_or_han(tail)) continue;
     if (is_wrapped_group(tail)) continue;
     return true;
@@ -488,7 +379,7 @@ ChineseNumberedScan scan_chinese_numbered(std::string_view s) {
       i += len;
     }
     if (i == number_start) return scan;
-    // Whitespace between the number and the unit is allowed.
+    // 数字与单位之间允许空白。
     i += leading_sep_len(s.substr(i));
   }
   if (i >= s.size()) return scan;
@@ -617,7 +508,7 @@ bool is_roman_letter(char c) {
   }
 }
 
-// Consumes an optional numeric token (digits, roman, English number words).
+// 消费一个可选数字记号：阿拉伯数字、罗马数字或英文数词。
 std::size_t consume_number_token(const std::string& s, std::size_t pos) {
   if (pos >= s.size()) return 0;
   std::size_t i = pos;
@@ -631,7 +522,7 @@ std::size_t consume_number_token(const std::string& s, std::size_t pos) {
   }
   if (count > 0 && count <= 6) return i - pos;
 
-  // Full-width roman numerals.
+  // 全角罗马数字。
   {
     std::size_t j = pos;
     std::size_t rl = 0;
@@ -648,7 +539,7 @@ std::size_t consume_number_token(const std::string& s, std::size_t pos) {
     if (rl > 0) return j - pos;
   }
 
-  // ASCII roman numerals.
+  // 半角罗马数字。
   {
     std::size_t j = pos;
     while (j < s.size() && is_roman_letter(s[j]) && j - pos < 8) ++j;
@@ -764,7 +655,7 @@ Match match_plain_number(const std::string& core) {
     }
   }
   if (!matched) {
-    // Roman numeral prefix (ASCII or full-width).
+    // 罗马数字前缀（半角或全角）。
     std::size_t j = 0;
     std::size_t rl = 0;
     char32_t cp = 0;
@@ -967,7 +858,7 @@ Match match_heading(std::string_view raw, const ParseOptions& options) {
   std::string trimmed(trimmed_view);
 
   int forced_level = 0;
-  // A. Markdown heading. Explicit marker, no further guards.
+  // Markdown 井号：显式标记，不再做正文判定。
   {
     std::size_t hashes = 0;
     while (hashes < trimmed.size() && trimmed[hashes] == '#') ++hashes;
@@ -975,9 +866,8 @@ Match match_heading(std::string_view raw, const ParseOptions& options) {
       if (trimmed[hashes] == ' ' || trimmed[hashes] == '\t') {
         const std::string title = collapse_ws(trimmed.substr(hashes));
         if (!title.empty()) {
-          // A single '#' is the top level of the file's own outline.  It is a
-          // volume only when the text itself says 卷/部/篇; "# 第一章" is a
-          // chapter, not a volume.
+          // 单个井号是文件自身的顶层；只有标题本身写卷 / 部 / 篇才算卷，
+          // 「# 第一章」仍是章。
           int level = 2;
           if (hashes == 1) {
             const Match numbered = match_numbered(title);
@@ -1003,7 +893,7 @@ Match match_heading(std::string_view raw, const ParseOptions& options) {
                            std::max(1, options.max_title_chars))) {
     return {};
   }
-  // A sentence-final mark followed by more text means this is prose.
+  // 句末标点之后还有内容，视为正文。
   if (has_embedded_sentence_end(core)) return {};
 
   Match match;
@@ -1045,38 +935,10 @@ bool looks_like_toc_label(std::string_view line) {
 
 }  // namespace
 
-std::vector<std::string> split_lines(std::string_view text) {
-  std::vector<std::string> lines;
-  std::size_t start = 0;
-  for (std::size_t i = 0; i < text.size(); ++i) {
-    if (text[i] == '\n') {
-      lines.emplace_back(text.substr(start, i - start));
-      start = i + 1;
-    }
-  }
-  if (start < text.size()) lines.emplace_back(text.substr(start));
-  return lines;
-}
-
-std::vector<std::string_view> split_lines_view(std::string_view text) {
-  std::vector<std::string_view> lines;
-  std::size_t start = 0;
-  for (std::size_t i = 0; i < text.size(); ++i) {
-    if (text[i] == '\n') {
-      lines.emplace_back(text.substr(start, i - start));
-      start = i + 1;
-    }
-  }
-  if (start < text.size()) lines.emplace_back(text.substr(start));
-  return lines;
-}
-
-bool is_blank_line(std::string_view line) { return trim_ws_view(line).empty(); }
-
 ParseResult parse_chapters(std::string_view utf8_text,
                            const ParseOptions& options) {
   ParseResult result;
-  // Tolerate raw CRLF input; TextFile normally normalizes before this point.
+  // 容忍未归一化的 CRLF 输入；TextFile 通常已在此前处理。
   std::string normalized;
   std::string_view text = utf8_text;
   if (utf8_text.find('\r') != std::string_view::npos) {
@@ -1103,8 +965,8 @@ ParseResult parse_chapters(std::string_view utf8_text,
   std::vector<bool> toc(lines.size(), false);
   std::vector<bool> excluded(all.size(), false);
 
-  // Locate the opening table of contents: >=3 heading candidates, only blank
-  // lines in between, plus a "目录"-like label or duplicated titles.
+  // 开头目录区：连续不少于 3 个候选标题，中间只有空行，
+  // 且带「目录」类标签或与后文标题重复。
   constexpr std::size_t kOpeningLimit = 300;
   std::size_t index = 0;
   while (index < all.size()) {
@@ -1178,8 +1040,7 @@ ParseResult parse_chapters(std::string_view utf8_text,
     index = last + 1;
   }
 
-  // Consecutive plain-number / bracketed headings with no body lines between
-  // them are list items or a bare table of contents, not chapters.
+  // 连续无正文的纯数字 / 括号标题判为列表项或裸目录，不算章节。
   std::size_t list_lines = 0;
   {
     std::size_t a = 0;
@@ -1350,7 +1211,7 @@ void split_heading_display(const std::string& full_title, Chapter& chapter) {
     i += leading_sep_len(title.substr(i));
     const std::size_t number_len = consume_number_token(low, i);
     if (number_len == 0) {
-      // Prologue / Epilogue：整词作序号列，不参与递增。
+      // Prologue / Epilogue 等无数字关键词：整词作序号列，不参与递增。
       assign_columns(chapter, std::string(title.substr(0, len)),
                      title.substr(len), false);
       return;

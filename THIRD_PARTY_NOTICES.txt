@@ -6,7 +6,7 @@ Qt 5.9.7
 - 版权：The Qt Company Ltd. 及贡献者
 - 许可：GNU Lesser General Public License v3（LGPL-3.0）
 - 项目主页：https://www.qt.io/
-- 源码：https://code.qt.io/cgit/qt/qtbase.git/tree/?h=5.9
+- 源码：https://code.qt.io/cgit/qt/qtbase.git/tree/ ? h=5.9
 - 发行说明：Qt 以动态库方式链接；Qt5Core.dll、Qt5Gui.dll、Qt5Widgets.dll 可由用户替换。
 - 许可全文：licenses/Qt-LGPLv3.txt
 

@@ -6,7 +6,7 @@
 
 namespace novel {
 
-// Half-open source line range [begin, end), 0-based.
+// 源行半开区间 [begin, end)，0 基。
 struct LineRange {
   std::size_t begin = 0;
   std::size_t end = 0;

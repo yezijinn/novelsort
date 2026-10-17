@@ -15,8 +15,8 @@ struct TextLoadResult {
   std::string error;
 };
 
-// Decodes raw bytes: UTF-8 BOM -> UTF-16LE BOM -> UTF-16BE BOM -> strict UTF-8
-// -> GB18030 (Windows only). Newlines are normalized to LF.
+// 解码字节：UTF-8 BOM、UTF-16LE BOM、UTF-16BE BOM、严格 UTF-8、
+// GB18030（仅 Windows）。换行统一为 LF。
 TextLoadResult decode_text_bytes(std::string_view bytes);
 // 接管入参缓冲区（合法 UTF-8 时不再复制一份）。
 TextLoadResult decode_text_bytes(std::string&& bytes);

@@ -9,11 +9,11 @@
 
 namespace novel {
 
-// moves are 1-based (from, to); applied in order, to is clamped to [1, n].
+// moves 为 1 基（from, to）；按序应用，to 钳制在 [1, n]。
 std::vector<Chapter> reorder_chapters(std::vector<Chapter> chapters,
                                       const std::vector<std::pair<int, int>>& moves);
 
-// Renders chapters in the given order using the original line ranges.
+// 按给定顺序渲染章节，沿用原始行区间。
 // excluded_ranges 为已删除章节的源行区间，输出时跳过。
 // text_exclusions 为源行内的无效片段，输出时只删除对应字节；为空时走旧快路径。
 std::string render_txt(const std::string& original_utf8,

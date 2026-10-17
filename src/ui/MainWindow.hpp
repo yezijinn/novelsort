@@ -135,7 +135,7 @@ class MainWindow : public QMainWindow {
   // 成功后更新 lastExportedPath_ 并启用「打开导出位置」。
   bool exportContent(bool json);
 
-  // 预览区光标 → 源行映射
+  // 预览区光标所在位置映射到源行号。
   int previewCursorToSource(QTextCursor cursor) const;
 
   // 在预览文档上叠加「无效内容」删除线样式（文档保留，仅视觉标记）。
