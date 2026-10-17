@@ -51,12 +51,13 @@ class MainWindow : public QMainWindow {
   explicit MainWindow(QWidget* parent = nullptr);
   ~MainWindow() override;
 
+  // 自检需要读写私有状态（撤销栈、预览缓存、无效内容、对话框字段）。
+  friend int runSelftest(MainWindow& window, const std::filesystem::path& path,
+                         const std::string& outDir);
+
   // 加载文件；调用方负责在替换当前内容前确认未保存修改。
   // silent=true 时仅更新空状态，不弹加载错误框。
   void loadFile(const std::filesystem::path& path, bool silent = false);
-
-  // 自检模式（--selftest）：无窗口交互，返回错误数（0 = 全 PASS）。
-  int runSelfTest(const std::filesystem::path& path, const std::string& outDir);
 
   // 启动时检查自动备份；返回 true 表示已恢复，调用方不要再加载 --input。
   bool tryRecoverBackup();
@@ -131,7 +132,7 @@ class MainWindow : public QMainWindow {
   // 在预览文档上叠加「无效内容」删除线样式（文档保留，仅视觉标记）。
   void applyExclusionFormats(const QVector<int>& sourceToBlock);
 
-  // 撤销 / 重做
+  // 撤销 / 重做快照。自检需要直接构造快照验证内存裁剪，故为公开类型。
   struct Snapshot {
     std::vector<novel::Chapter> chapters;
     std::vector<novel::LineRange> excluded;
@@ -144,6 +145,8 @@ class MainWindow : public QMainWindow {
   // 同时受步数与总内存约束，超限从最旧一步开始丢；至少保留一步。
   static void trimUndoStack(std::vector<Snapshot>& stack,
                             std::size_t stepLimit, std::size_t byteLimit);
+
+ private:
   void pushUndo();
   void undo();
   void redo();

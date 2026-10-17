@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "ui/MainWindow.hpp"
+#include "ui/Selftest.hpp"
 #include "core/TextUtf8.hpp"
 #include "ui/Theme.hpp"
 
@@ -119,8 +120,8 @@ int main(int argc, char** argv) {
       return 1;
     }
     ui::MainWindow window;
-    const int failures = window.runSelfTest(
-        novel::path_from_utf8(input.toStdString()),
+    const int failures = ui::runSelftest(
+        window, novel::path_from_utf8(input.toStdString()),
         novel::path_to_utf8(novel::path_from_utf8(selftest.toStdString())));
     return failures == 0 ? 0 : 1;
   }

@@ -38,6 +38,7 @@ if(Qt5_FOUND)
     src/ui/ChapterModel.cpp
     src/ui/ChapterTableView.cpp
     src/ui/PreviewEdit.cpp
+    src/ui/Selftest.cpp
     src/ui/RecoveryStore.cpp
     src/ui/Theme.cpp
     src/ui/CheckBoxStyle.cpp
