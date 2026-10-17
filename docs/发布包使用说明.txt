@@ -1,0 +1,23 @@
+novelsort / novel-lines 2026-10-18
+
+运行
+- 双击 novellines-gui.exe 启动桌面版。
+- novellines-cli.exe 供命令行批处理使用。
+
+打开与导出
+- 支持 UTF-8、UTF-8 BOM、UTF-16LE/BE、GB18030。
+- 左侧选择章节，右侧查看正文。
+- 拖动章节行或按 Alt+↑/↓ 调整顺序。
+- 导出 TXT 与目录 JSON；默认导出到程序目录。
+- 修改后未导出就关闭或打开新文件，会先确认。
+
+恢复
+- 编辑后约 1.5 秒自动备份。
+- 异常退出后重新启动，可按提示恢复。
+- 原 TXT 被移动或修改后，备份不能安全恢复。
+
+许可
+- 程序采用 GPL-3.0，见 LICENSE。
+- 第三方组件见 THIRD_PARTY_NOTICES.txt 与 licenses 目录。
+- 源码：https://github.com/yezijinn/novelsort
+- 镜像：https://gitee.com/yezijinn/novelsort

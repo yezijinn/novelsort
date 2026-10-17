@@ -1,0 +1,39 @@
+novel-lines / novelsort 第三方组件声明
+
+日期：2026-10-18
+
+Qt 5.9.7
+- 版权：The Qt Company Ltd. 及贡献者
+- 许可：GNU Lesser General Public License v3（LGPL-3.0）
+- 项目主页：https://www.qt.io/
+- 源码：https://code.qt.io/cgit/qt/qtbase.git/tree/?h=5.9
+- 发行说明：Qt 以动态库方式链接；Qt5Core.dll、Qt5Gui.dll、Qt5Widgets.dll 可由用户替换。
+- 许可全文：licenses/Qt-LGPLv3.txt
+
+ICU 58
+- 版权：Unicode, Inc. 及贡献者
+- 许可：Unicode License
+- 源码：https://github.com/unicode-org/icu/releases/tag/release-58-2
+- 文件：icudt58.dll、icuin58.dll、icuuc58.dll
+- 许可全文：licenses/ICU.txt
+
+libpng 1.6
+- 许可：libpng License
+- 源码：http://www.libpng.org/pub/png/libpng.html
+- 文件：libpng16.dll
+- 许可全文：licenses/libpng.txt
+
+zlib 1.2
+- 许可：zlib License
+- 源码：https://zlib.net/
+- 文件：zlib.dll
+- 许可全文：licenses/zlib.txt
+
+Microsoft Visual C++ Runtime
+- 文件：msvcp140.dll、vcruntime140.dll、vcruntime140_1.dll
+- 许可：Microsoft Visual Studio 可再发行组件条款
+- 说明：随程序分发运行时库；不修改 Microsoft 文件。
+
+应用源码
+- GitHub：https://github.com/yezijinn/novelsort
+- Gitee：https://gitee.com/yezijinn/novelsort

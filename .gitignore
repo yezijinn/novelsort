@@ -1,0 +1,29 @@
+build/
+build-*/
+out/
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+*.obj
+*.log
+*.ps1
+*.pdb
+*.ilk
+*.exp
+*.zip
+*.7z
+*.sha256
+.env
+*.env
+
+# 发布暂存与本地产物
+dist/
+release/
+screens/
+screenshots*/
+selftest_out/
+
+# 本地外部样本（受版权保护，不随仓库发布）
+tests/data/real_local/
