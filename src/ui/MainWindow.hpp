@@ -14,6 +14,7 @@
 #include <QVector>
 
 #include "core/Chapter.hpp"
+#include "ui/ChapterDialogs.hpp"
 #include "ui/ChapterModel.hpp"
 #include "ui/RecoveryStore.hpp"
 
@@ -161,26 +162,7 @@ class MainWindow : public QMainWindow {
   // 当前选中章（无则 nullptr）
   const novel::Chapter* currentChapter() const;
 
-  // 对话框（构建与执分离，截图模式可单独显示）
-  struct RenameFields {
-    QLineEdit* number = nullptr;
-    QLineEdit* name = nullptr;
-  };
-  struct SplitFields {
-    QLineEdit* number = nullptr;
-    QLineEdit* name = nullptr;
-    QCheckBox* participate = nullptr;  // 无编号当前章：新章是否参与排序
-    bool autoNumber = false;  // 当前章有编号：序号只读，由 core 自动 +1
-  };
-  struct RenumberFields {
-    QComboBox* style = nullptr;  // 阿拉伯 / 中文
-    QSpinBox* start = nullptr;
-    QComboBox* pad = nullptr;    // 序号位数：自然 / 2 / 3 / 4
-  };
-  QDialog* buildRenameDialog(const novel::Chapter& ch, RenameFields& fields);
-  QDialog* buildSplitDialog(const novel::Chapter& ch, const QString& suggestedNumber,
-                            SplitFields& fields);
-  QDialog* buildRenumberDialog(RenumberFields& fields);
+  // 对话框由 ui::ChapterDialogs 构建，字段类型见 ui/ChapterDialogs.hpp。
   void renumberDialog();
 
   // 模型与视图

@@ -73,6 +73,7 @@
 #include "core/DirectoryEdit.hpp"
 #include "core/TextFile.hpp"
 #include "ui/ChapterTableView.hpp"
+#include "ui/ChapterDialogs.hpp"
 #include "ui/CheckBoxStyle.hpp"
 #include "ui/PreviewEdit.hpp"
 #include "ui/RecoveryStore.hpp"
@@ -1850,107 +1851,6 @@ const novel::Chapter* MainWindow::currentChapter() const {
   return &chapterModel_->chapters()[static_cast<std::size_t>(src)];
 }
 
-namespace {
-
-// 对话框公共骨架：标题、内容区、确定/取消。调用方继续往 lay 里加控件。
-QDialog* makeDialog(QWidget* parent, const QString& title, bool dark,
-                    QVBoxLayout** outLay) {
-  QDialog* dlg = new QDialog(parent);
-  dlg->setWindowTitle(title);
-  dlg->setMinimumWidth(metrics::kDialogMinWidth);
-  dlg->setObjectName(QStringLiteral("dialog"));
-#ifdef _WIN32
-  applyWindowsFrame(dlg->winId(), dark);
-#endif
-  QVBoxLayout* lay = new QVBoxLayout(dlg);
-  lay->setContentsMargins(20, 18, 20, 16);
-  lay->setSpacing(12);
-
-  QLabel* head = new QLabel(title, dlg);
-  head->setObjectName(QStringLiteral("dialogTitle"));
-  lay->addWidget(head);
-  *outLay = lay;
-  return dlg;
-}
-
-// 一行「标签 + 输入框」。
-QHBoxLayout* fieldRow(QWidget* parent, QVBoxLayout* lay, const QString& label,
-                      QLineEdit* edit) {
-  QHBoxLayout* row = new QHBoxLayout();
-  row->setSpacing(8);
-  QLabel* lab = new QLabel(label, parent);
-  lab->setFixedWidth(metrics::kFieldLabelWidth);
-  lab->setObjectName(QStringLiteral("dialogHint"));
-  row->addWidget(lab);
-  row->addWidget(edit, 1);
-  lay->addLayout(row);
-  return row;
-}
-
-QDialogButtonBox* addButtons(QDialog* dlg, QVBoxLayout* lay, QPushButton** outOk) {
-  QPushButton* ok = new QPushButton(QStringLiteral("确定"), dlg);
-  ok->setProperty("class", "primary");
-  ok->setCursor(Qt::PointingHandCursor);
-  QPushButton* cancel = new QPushButton(QStringLiteral("取消"), dlg);
-  cancel->setCursor(Qt::PointingHandCursor);
-  QDialogButtonBox* box = new QDialogButtonBox(dlg);
-  box->addButton(ok, QDialogButtonBox::AcceptRole);
-  box->addButton(cancel, QDialogButtonBox::RejectRole);
-  lay->addWidget(box);
-  QObject::connect(box, &QDialogButtonBox::accepted, dlg, &QDialog::accept);
-  QObject::connect(box, &QDialogButtonBox::rejected, dlg, &QDialog::reject);
-  *outOk = ok;
-  return box;
-}
-
-}  // namespace
-
-QDialog* MainWindow::buildRenameDialog(const novel::Chapter& ch,
-                                       RenameFields& fields) {
-  QVBoxLayout* lay = nullptr;
-  QDialog* dlg = makeDialog(this, QStringLiteral("重命名章节"), themeDark_, &lay);
-
-  QLabel* hint = new QLabel(
-      QStringLiteral("序号用于识别可递增编号（如「第1章」）；标题为序号之后的文字。"
-                     "两者至少填一项，序号可留空。"),
-      dlg);
-  hint->setObjectName(QStringLiteral("dialogHint"));
-  hint->setWordWrap(true);
-  lay->addWidget(hint);
-
-  QLineEdit* numEdit = new QLineEdit(dlg);
-  numEdit->setText(qs(ch.number));
-  numEdit->setPlaceholderText(QStringLiteral("如：第1章 / 序章（可留空）"));
-  fields.number = numEdit;
-
-  QLineEdit* nameEdit = new QLineEdit(dlg);
-  nameEdit->setText(qs(ch.name));
-  nameEdit->setPlaceholderText(QStringLiteral("如：启程（可留空）"));
-  fields.name = nameEdit;
-
-  fieldRow(dlg, lay, QStringLiteral("序号"), numEdit);
-  fieldRow(dlg, lay, QStringLiteral("标题"), nameEdit);
-
-  QPushButton* ok = nullptr;
-  addButtons(dlg, lay, &ok);
-  const auto syncOk = [ok, numEdit, nameEdit]() {
-    ok->setEnabled(!numEdit->text().trimmed().isEmpty() ||
-                   !nameEdit->text().trimmed().isEmpty());
-  };
-  connect(numEdit, &QLineEdit::textChanged, dlg, syncOk);
-  connect(nameEdit, &QLineEdit::textChanged, dlg, syncOk);
-  syncOk();
-
-  if (ch.number.empty()) {
-    nameEdit->setFocus();
-    nameEdit->selectAll();
-  } else {
-    numEdit->setFocus();
-    numEdit->selectAll();
-  }
-  return dlg;
-}
-
 void MainWindow::onRenameChapter() {
   const int src = currentSourceRow();
   if (src < 0) return;
@@ -1958,7 +1858,7 @@ void MainWindow::onRenameChapter() {
   novel::Chapter& ch = chs[static_cast<std::size_t>(src)];
 
   RenameFields fields;
-  QDialog* dlg = buildRenameDialog(ch, fields);
+  QDialog* dlg = ui::buildRenameDialog(this, themeDark_, ch, fields);
   const bool accepted = dlg->exec() == QDialog::Accepted;
   const QString number = fields.number->text().trimmed();
   const QString name = fields.name->text().trimmed();
@@ -1976,7 +1876,6 @@ void MainWindow::onRenameChapter() {
     updateControls();
   }
 }
-
 
 // 在预览文档上叠加「无效内容」删除线样式（文档中仍保留，可继续选中）。
 // sourceToBlock[srcLine] = block 行号（-1 表示该源行不在当前预览中）。
@@ -2251,67 +2150,10 @@ void MainWindow::onDeleteChapter() {
   }
 }
 
-QDialog* MainWindow::buildRenumberDialog(RenumberFields& fields) {
-  QVBoxLayout* lay = nullptr;
-  QDialog* dlg = makeDialog(this, QStringLiteral("重新编排章节"), themeDark_, &lay);
-
-  QLabel* tip = new QLabel(
-      QStringLiteral("只重写能解析出编号的标题。「不参与排序」与序章 / 番外等"
-                     "无编号章节不计数，原样保留。"),
-      dlg);
-  tip->setObjectName(QStringLiteral("dialogHint"));
-  tip->setWordWrap(true);
-  lay->addWidget(tip);
-
-  QComboBox* styleCombo = new QComboBox(dlg);
-  styleCombo->addItem(QStringLiteral("阿拉伯数字"), false);
-  styleCombo->addItem(QStringLiteral("中文数字"), true);
-  styleCombo->setCurrentIndex(0);
-  fields.style = styleCombo;
-
-  QSpinBox* startSpin = new QSpinBox(dlg);
-  startSpin->setRange(1, 9999);
-  startSpin->setValue(1);
-  fields.start = startSpin;
-
-  QComboBox* padCombo = new QComboBox(dlg);
-  padCombo->addItem(QStringLiteral("自然"), 0);
-  padCombo->addItem(QStringLiteral("2 位（01）"), 2);
-  padCombo->addItem(QStringLiteral("3 位（001）"), 3);
-  padCombo->addItem(QStringLiteral("4 位（0001）"), 4);
-  padCombo->setCurrentIndex(0);
-  fields.pad = padCombo;
-
-  const auto labelled = [&](const QString& text, QWidget* w) {
-    QHBoxLayout* row = new QHBoxLayout();
-    row->setSpacing(8);
-    QLabel* lab = new QLabel(text, dlg);
-    lab->setFixedWidth(metrics::kDialogLabelWidth);
-    lab->setObjectName(QStringLiteral("dialogHint"));
-    row->addWidget(lab);
-    row->addWidget(w, 1);
-    lay->addLayout(row);
-  };
-  labelled(QStringLiteral("编号写法："), styleCombo);
-  labelled(QStringLiteral("起始号："), startSpin);
-  labelled(QStringLiteral("序号位数："), padCombo);
-
-  connect(styleCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), dlg,
-          [styleCombo, padCombo](int) {
-            const bool chinese = styleCombo->currentData().toBool();
-            padCombo->setEnabled(!chinese);  // 中文数字无补零概念
-            if (chinese) padCombo->setCurrentIndex(0);
-          });
-
-  QPushButton* ok = nullptr;
-  addButtons(dlg, lay, &ok);
-  return dlg;
-}
-
 void MainWindow::renumberDialog() {
   if (!isLoaded_) return;
   RenumberFields fields;
-  QDialog* dlg = buildRenumberDialog(fields);
+  QDialog* dlg = ui::buildRenumberDialog(this, themeDark_, fields);
   const bool accepted = dlg->exec() == QDialog::Accepted;
   const bool chinese = fields.style->currentData().toBool();
   const int start = fields.start->value();
@@ -2465,79 +2307,6 @@ void MainWindow::onPreviewContextMenu(const QPoint& pos) {
   menu->exec(previewEdit_->mapToGlobal(pos));
 }
 
-QDialog* MainWindow::buildSplitDialog(const novel::Chapter& ch,
-                                      const QString& suggestedNumber,
-                                      SplitFields& fields) {
-  fields.autoNumber = ch.numbered && !ch.excluded_from_numbering;
-  QVBoxLayout* lay = nullptr;
-  QDialog* dlg =
-      makeDialog(this, QStringLiteral("在此拆分章节"), themeDark_, &lay);
-
-  QLabel* hint = new QLabel(
-      fields.autoNumber
- ? QStringLiteral("从光标所在行起划入新章。当前章有编号，新章序号自动按"
-                           "当前序号 +1 生成，后续章节依次后移。")
-          : QStringLiteral("从光标所在行起划入新章。当前章没有可递增序号；"
-                           "可勾选「新章节参与排序」并填写序号，后续章节自动后移；"
-                           "不勾选则新章不参与排序。"),
-      dlg);
-  hint->setObjectName(QStringLiteral("dialogHint"));
-  hint->setWordWrap(true);
-  lay->addWidget(hint);
-
-  QLineEdit* numEdit = new QLineEdit(dlg);
-  if (fields.autoNumber) {
-    numEdit->setText(QStringLiteral("自动：当前序号 +1"));
-    numEdit->setReadOnly(true);
-  } else {
-    numEdit->setText(suggestedNumber);
-    numEdit->setPlaceholderText(QStringLiteral("如：第1章"));
-  }
-  fields.number = numEdit;
-
-  QLineEdit* nameEdit = new QLineEdit(dlg);
-  nameEdit->setPlaceholderText(QStringLiteral("新章节标题"));
-  fields.name = nameEdit;
-
-  fieldRow(dlg, lay, QStringLiteral("序号"), numEdit);
-  fieldRow(dlg, lay, QStringLiteral("标题"), nameEdit);
-
-  QCheckBox* participate = nullptr;
-  if (!fields.autoNumber) {
-    participate = new QCheckBox(QStringLiteral("新章节参与排序"), dlg);
-    participate->setStyle(new ui::CheckBoxStyle(participate->style()));
-    // 有可用的后续编号时默认参与；否则默认不参与，由用户主动勾选。
-    participate->setChecked(!suggestedNumber.isEmpty());
-    participate->setToolTip(
-        QStringLiteral("勾选后新章占用序号，后续参与排序的章节自动 +1"));
-    lay->addWidget(participate);
-    fields.participate = participate;
-  }
-
-  QPushButton* ok = nullptr;
-  addButtons(dlg, lay, &ok);
-  const auto syncOk = [ok, numEdit, nameEdit, participate,
-                       autoNumber = fields.autoNumber]() {
-    if (autoNumber) {
-      ok->setEnabled(!nameEdit->text().trimmed().isEmpty());
-    } else {
-      const bool wantNumber = participate != nullptr && participate->isChecked();
-      numEdit->setEnabled(wantNumber);
-      ok->setEnabled(!nameEdit->text().trimmed().isEmpty() &&
-                     (!wantNumber || !numEdit->text().trimmed().isEmpty()));
-    }
-  };
-  connect(numEdit, &QLineEdit::textChanged, dlg, syncOk);
-  connect(nameEdit, &QLineEdit::textChanged, dlg, syncOk);
-  if (participate) {
-    connect(participate, &QCheckBox::toggled, dlg, syncOk);
-  }
-  syncOk();
-
-  nameEdit->setFocus();
-  return dlg;
-}
-
 void MainWindow::onSplitHere() {
   const int src = currentSourceRow();
   if (src < 0) return;
@@ -2585,7 +2354,8 @@ void MainWindow::onSplitHere() {
     }
   }
   SplitFields fields;
-  QDialog* dlg = buildSplitDialog(current, suggestedNumber, fields);
+  QDialog* dlg = ui::buildSplitDialog(this, themeDark_, current,
+                                     suggestedNumber, fields);
   const bool accepted = dlg->exec() == QDialog::Accepted;
   const bool participate =
       fields.autoNumber ||
@@ -3473,6 +3243,4 @@ int MainWindow::runSelfTest(const std::filesystem::path& path,
 
 // ===== 截图模式（开发用） =====
 
-
 }  // namespace ui
-
