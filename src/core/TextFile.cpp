@@ -3,7 +3,6 @@
 #include "core/TextUtf8.hpp"
 
 #include <algorithm>
-#include <cstdint>
 #include <fstream>
 #include <iterator>
 #include <limits>

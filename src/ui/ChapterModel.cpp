@@ -1,8 +1,6 @@
 #include "ui/ChapterModel.hpp"
 #include "ui/Theme.hpp"
 
-#include <algorithm>
-
 namespace ui {
 
 QVariant ChapterModel::data(const QModelIndex& index, int role) const {

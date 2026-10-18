@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstdint>
 #include <cstring>
 #include <map>
 #include <string>
