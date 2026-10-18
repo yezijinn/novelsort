@@ -255,7 +255,10 @@ class MainWindow : public QMainWindow {
     std::size_t extraHash = 0;
     bool themeDark = true;
     QString body;
+    // 缓存两份映射：block -> 源行（光标定位、拆分用）与 源行 -> block
+    // （无效内容删除线定位用）。缺一份时缓存命中无法还原删除线状态。
     QVector<int> previewLineToSource;
+    QVector<int> previewSourceToBlock;
 
     bool empty() const { return sourceRow < 0; }
     void reset() { *this = PreviewCache{}; }

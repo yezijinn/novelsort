@@ -1120,6 +1120,7 @@ void MainWindow::previewSourceRow(int sourceRow) {
     previewEdit_->setVisible(true);
     previewLineToSource_ = previewCache_.previewLineToSource;
     blockToSource_ = previewCache_.previewLineToSource;
+    sourceToBlock_ = previewCache_.previewSourceToBlock;
     // 主题切换/缓存命中后重新叠加删除线，保证视觉状态不丢。
     applyExclusionFormats(sourceToBlock_);
     previewEdit_->refreshLineHighlight();
@@ -1314,6 +1315,7 @@ void MainWindow::previewSourceRow(int sourceRow) {
   previewCache_.themeDark = themeDark_;
   previewCache_.body = body;
   previewCache_.previewLineToSource = previewLineToSource_;
+  previewCache_.previewSourceToBlock = sourceToBlock_;
 }
 
 int MainWindow::previewCursorToSource(QTextCursor cursor) const {
