@@ -9,55 +9,11 @@
 #include <vector>
 
 #include "core/ChapterParser.hpp"
+#include "core/Json.hpp"
 #include "core/TextFile.hpp"
 
 namespace novel {
 namespace {
-
-void append_json_string(std::string& out, std::string_view text) {
-  out.push_back('"');
-  for (const char raw : text) {
-    const auto c = static_cast<unsigned char>(raw);
-    switch (c) {
-      case '"':
-        out += "\\\"";
-        break;
-      case '\\':
-        out += "\\\\";
-        break;
-      case '\n':
-        out += "\\n";
-        break;
-      case '\r':
-        out += "\\r";
-        break;
-      case '\t':
-        out += "\\t";
-        break;
-      case '\b':
-        out += "\\b";
-        break;
-      case '\f':
-        out += "\\f";
-        break;
-      default:
-        if (c < 0x20) {
-          static const char* const kHex = "0123456789abcdef";
-          out += "\\u00";
-          out.push_back(kHex[(c >> 4) & 0x0F]);
-          out.push_back(kHex[c & 0x0F]);
-        } else {
-          out.push_back(raw);
-        }
-        break;
-    }
-  }
-  out.push_back('"');
-}
-
-void append_number(std::string& out, long long value) {
-  out += std::to_string(value);
-}
 
 // skip_lines 由 DirectoryEdit 维护为升序无重复，可直接二分。
 bool has_skip_line(const Chapter& chapter, std::size_t line) {
@@ -339,15 +295,15 @@ std::string directory_json(const DirectoryJsonInput& input) {
     if (i != 0) out.push_back(',');
     const Chapter& chapter = chapters[i];
     out += "{\"index\":";
-    append_number(out, static_cast<long long>(i) + 1);
+    append_json_number(out, static_cast<long long>(i) + 1);
     out += ",\"level\":";
-    append_number(out, chapter.level);
+    append_json_number(out, chapter.level);
     out += ",\"title\":";
     append_json_string(out, chapter.title);
     out += ",\"start_line\":";
-    append_number(out, static_cast<long long>(chapter.start_line));
+    append_json_number(out, static_cast<long long>(chapter.start_line));
     out += ",\"end_line\":";
-    append_number(out, static_cast<long long>(chapter.end_line));
+    append_json_number(out, static_cast<long long>(chapter.end_line));
     out += ",\"synthetic\":";
     out += chapter.synthetic ? "true" : "false";
     out.push_back('}');
@@ -355,7 +311,7 @@ std::string directory_json(const DirectoryJsonInput& input) {
   out += "],\"toc_lines\":[";
   for (std::size_t i = 0; i < toc_lines.size(); ++i) {
     if (i != 0) out.push_back(',');
-    append_number(out, static_cast<long long>(toc_lines[i]));
+    append_json_number(out, static_cast<long long>(toc_lines[i]));
   }
   out += "],\"warnings\":[";
   for (std::size_t i = 0; i < warnings.size(); ++i) {

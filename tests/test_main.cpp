@@ -9,6 +9,7 @@
 #include "core/ChapterOrder.hpp"
 #include "core/ChapterParser.hpp"
 #include "core/DirectoryEdit.hpp"
+#include "core/Script.hpp"
 #include "core/TextFile.hpp"
 
 #ifdef _WIN32
@@ -1907,6 +1908,227 @@ void test_columns_title_invariant() {
   CHECK_EQ(files, static_cast<std::size_t>(133));
 }
 
+novel::Chapter script_chapter(std::size_t start, std::size_t end,
+                             const std::string& title) {
+  novel::Chapter chapter;
+  chapter.level = 2;
+  chapter.title = title;
+  chapter.heading_line = title;
+  chapter.start_line = start;
+  chapter.end_line = end;
+  return chapter;
+}
+
+novel::ScriptDocument script_from(
+    const std::string& text, const std::vector<novel::Chapter>& chapters,
+    const std::vector<std::size_t>& toc_lines = {}) {
+  return novel::build_script(text, chapters, toc_lines, "test.txt", "utf-8");
+}
+
+void test_script_split_basic() {
+  g_test = "script_split_basic";
+  const std::string text =
+      "第一章 起点\n"
+      "夜色沉了下来。\n"
+      "林雪冷冷地说道：“你终于来了。”\n"
+      "他微笑着说：“抱歉。”\n"
+      "她心想：“他变了。”\n";
+  const std::vector<novel::Chapter> chapters{
+      script_chapter(0, 5, "第一章 起点")};
+  const novel::ScriptDocument doc = script_from(text, chapters);
+  CHECK_EQ(doc.segments.size(), static_cast<std::size_t>(8));
+  if (doc.segments.size() != 8) return;
+
+  const novel::ScriptSegmentType expected[] = {
+      novel::ScriptSegmentType::heading,   novel::ScriptSegmentType::narration,
+      novel::ScriptSegmentType::narration, novel::ScriptSegmentType::dialogue,
+      novel::ScriptSegmentType::narration, novel::ScriptSegmentType::dialogue,
+      novel::ScriptSegmentType::narration, novel::ScriptSegmentType::thought};
+  for (std::size_t i = 0; i < 8; ++i) {
+    CHECK(doc.segments[i].type == expected[i]);
+    CHECK_EQ(doc.segments[i].id, static_cast<int>(i) + 1);
+    CHECK_EQ(doc.segments[i].chapter_index, 1);
+  }
+
+  CHECK_EQ(doc.segments[0].text, std::string("第一章 起点"));
+  CHECK_EQ(doc.segments[1].text, std::string("夜色沉了下来。"));
+  CHECK_EQ(doc.segments[2].text, std::string("林雪冷冷地说道："));
+  CHECK_EQ(doc.segments[3].text, std::string("“你终于来了。”"));
+  CHECK_EQ(doc.segments[4].text, std::string("他微笑着说："));
+  CHECK_EQ(doc.segments[5].text, std::string("“抱歉。”"));
+  CHECK_EQ(doc.segments[6].text, std::string("她心想："));
+  CHECK_EQ(doc.segments[7].text, std::string("“他变了。”"));
+
+  CHECK_EQ(doc.segments[3].speaker_hint, std::string("林雪"));
+  CHECK_EQ(doc.segments[5].speaker_hint, std::string("他"));
+  CHECK(doc.segments[7].speaker_hint.empty());
+  CHECK_EQ(doc.segments[3].speak_text, std::string("你终于来了。"));
+  CHECK_EQ(doc.segments[5].speak_text, std::string("抱歉。"));
+  CHECK_EQ(doc.segments[7].speak_text, std::string("他变了。"));
+
+  CHECK_EQ(doc.segments[0].speaker_id, std::string("narrator"));
+  CHECK_EQ(doc.segments[1].speaker_id, std::string("narrator"));
+  CHECK(doc.segments[3].speaker_id.empty());
+  CHECK_EQ(doc.segments[3].confidence, 0.9f);
+
+  for (const novel::ScriptSegment& segment : doc.segments) {
+    CHECK(segment.source_start < segment.source_end);
+    CHECK(segment.source_end <= text.size());
+    CHECK_EQ(text.substr(segment.source_start,
+                         segment.source_end - segment.source_start),
+             segment.text);
+  }
+  CHECK(novel::validate_script(doc, text).empty());
+  const std::string json = novel::script_json(doc);
+  CHECK(json.find("\"speaker_id\":\"narrator\"") != std::string::npos);
+  CHECK(json.find("\"speaker_hint\":\"林雪\"") != std::string::npos);
+  CHECK(json.find("\"speaker_id\":null") != std::string::npos);
+}
+
+void test_script_nested_quotes() {
+  g_test = "script_nested_quotes";
+  const std::string text = "「他说：『走。』」\n";
+  novel::Chapter chapter = script_chapter(0, 1, "片段");
+  chapter.synthetic = true;
+  const novel::ScriptDocument doc = script_from(text, {chapter});
+  CHECK_EQ(doc.segments.size(), static_cast<std::size_t>(1));
+  if (doc.segments.size() != 1) return;
+  const novel::ScriptSegment& segment = doc.segments[0];
+  CHECK(segment.type == novel::ScriptSegmentType::dialogue);
+  CHECK_EQ(segment.text, std::string("「他说：『走。』」"));
+  CHECK_EQ(segment.speak_text, std::string("他说：『走。』"));
+  CHECK_EQ(segment.speaker_id, std::string(""));
+}
+
+void test_script_unclosed_quote() {
+  g_test = "script_unclosed_quote";
+  const std::string text = "她低声说：“我走了。\n";
+  novel::Chapter chapter = script_chapter(0, 1, "片段");
+  chapter.synthetic = true;
+  const novel::ScriptDocument doc = script_from(text, {chapter});
+  CHECK_EQ(doc.segments.size(), static_cast<std::size_t>(2));
+  if (doc.segments.size() != 2) return;
+  const novel::ScriptSegment& segment = doc.segments[1];
+  CHECK(segment.type == novel::ScriptSegmentType::dialogue);
+  CHECK(segment.needs_review);
+  CHECK(segment.confidence > 0.29f);
+  CHECK(segment.confidence < 0.31f);
+  CHECK_EQ(segment.speak_text, std::string("我走了。"));
+  CHECK_EQ(segment.text, std::string("“我走了。"));
+  const std::string json = novel::script_json(doc);
+  CHECK(json.find("\"confidence\":0.30") != std::string::npos);
+  CHECK(json.find("\"needs_review\":true") != std::string::npos);
+}
+
+void test_script_json_escape() {
+  g_test = "script_json_escape";
+  const std::string text = "「他说\"走\"，路径 C:\\temp\n第二行」\n";
+  novel::Chapter chapter = script_chapter(0, 2, "片段");
+  chapter.synthetic = true;
+  const novel::ScriptDocument doc = script_from(text, {chapter});
+  const std::string json = novel::script_json(doc);
+  CHECK(json.find("\"schema\":\"novelsort/script/1\"") != std::string::npos);
+  CHECK(json.find("\"offset_unit\":\"utf8_byte\"") != std::string::npos);
+  CHECK(json.find("\\\"走\\\"") != std::string::npos);
+  CHECK(json.find("C:\\\\temp") != std::string::npos);
+  CHECK(json.find("\\n第二行") != std::string::npos);
+  CHECK(json.find("NaN") == std::string::npos);
+  CHECK(json.find("inf") == std::string::npos);
+  CHECK_EQ(json.back(), '}');
+}
+
+void test_script_validate_offsets() {
+  g_test = "script_validate_offsets";
+  const std::string text = "第一句。\n第二句。\n";
+  novel::Chapter chapter = script_chapter(0, 2, "片段");
+  chapter.synthetic = true;
+  const novel::ScriptDocument doc = script_from(text, {chapter});
+  CHECK(novel::validate_script(doc, text).empty());
+
+  novel::ScriptDocument tampered = doc;
+  CHECK(!tampered.segments.empty());
+  if (tampered.segments.empty()) return;
+  tampered.segments[0].text = "被篡改的文本";
+  CHECK(!novel::validate_script(tampered, text).empty());
+}
+
+void test_script_toc_in_body() {
+  g_test = "script_toc_in_body";
+  const std::string text =
+      "第一章 起点\n"
+      "目录行\n"
+      "正文。\n";
+  const novel::ScriptDocument doc =
+      script_from(text, {script_chapter(0, 3, "第一章 起点")}, {1});
+  CHECK_EQ(doc.segments.size(), static_cast<std::size_t>(3));
+  if (doc.segments.size() != 3) return;
+  CHECK_EQ(doc.segments[1].text, std::string("目录行"));
+  CHECK_EQ(doc.segments[2].text, std::string("正文。"));
+  CHECK(novel::validate_script(doc, text).empty());
+}
+
+void test_script_toc_skip_synthetic() {
+  g_test = "script_toc_skip_synthetic";
+  const std::string text =
+      "目录行\n"
+      "正文。\n";
+  novel::Chapter chapter = script_chapter(0, 2, "前言");
+  chapter.synthetic = true;
+  const novel::ScriptDocument doc = script_from(text, {chapter}, {0});
+  CHECK_EQ(doc.segments.size(), static_cast<std::size_t>(1));
+  if (doc.segments.size() != 1) return;
+  CHECK_EQ(doc.segments[0].text, std::string("正文。"));
+  CHECK(novel::validate_script(doc, text).empty());
+}
+
+void test_script_heading_title() {
+  g_test = "script_heading_title";
+  const std::string text =
+      "第一章 旧名\n"
+      "正文。\n";
+  const novel::ScriptDocument doc =
+      script_from(text, {script_chapter(0, 2, "第一章 新名")});
+  CHECK_EQ(doc.segments.size(), static_cast<std::size_t>(2));
+  if (doc.segments.size() != 2) return;
+  CHECK_EQ(doc.chapters[0].title, std::string("第一章 新名"));
+  CHECK_EQ(doc.chapters[0].synthetic, false);
+  CHECK_EQ(doc.segments[0].type, novel::ScriptSegmentType::heading);
+  CHECK_EQ(doc.segments[0].text, std::string("第一章 旧名"));
+  CHECK_EQ(doc.segments[0].speak_text, std::string("第一章 新名"));
+}
+
+void test_script_chapter_order() {
+  g_test = "script_chapter_order";
+  const std::string text =
+      "第一章 甲\n"
+      "甲文。\n"
+      "第二章 乙\n"
+      "乙文。\n";
+  const std::vector<novel::Chapter> chapters{
+      script_chapter(0, 2, "第一章 甲"), script_chapter(2, 4, "第二章 乙")};
+  const novel::ScriptDocument doc = script_from(text, chapters);
+  CHECK_EQ(doc.chapters.size(), static_cast<std::size_t>(2));
+  CHECK_EQ(doc.segments.size(), static_cast<std::size_t>(4));
+  if (doc.chapters.size() != 2 || doc.segments.size() != 4) return;
+
+  const std::size_t second_begin = text.find("第二章 乙");
+  CHECK_EQ(doc.chapters[0].index, 1);
+  CHECK_EQ(doc.chapters[1].index, 2);
+  CHECK_EQ(doc.chapters[0].source_start, static_cast<std::size_t>(0));
+  CHECK_EQ(doc.chapters[0].source_end, second_begin);
+  CHECK_EQ(doc.chapters[1].source_start, second_begin);
+  CHECK_EQ(doc.chapters[1].source_end, text.size());
+
+  CHECK_EQ(doc.segments[0].chapter_index, 1);
+  CHECK_EQ(doc.segments[1].chapter_index, 1);
+  CHECK_EQ(doc.segments[2].chapter_index, 2);
+  CHECK_EQ(doc.segments[3].chapter_index, 2);
+  for (std::size_t i = 0; i < doc.segments.size(); ++i) {
+    CHECK_EQ(doc.segments[i].id, static_cast<int>(i) + 1);
+  }
+  CHECK(novel::validate_script(doc, text).empty());
+}
+
 struct TestCase {
   const char* name;
   void (*run)();
@@ -1978,6 +2200,15 @@ int main() {
       {"columns_extra_body_stack", test_columns_extra_body_stack},
       {"display_matches_parse", test_display_matches_parse},
       {"columns_title_invariant", test_columns_title_invariant},
+      {"script_split_basic", test_script_split_basic},
+      {"script_nested_quotes", test_script_nested_quotes},
+      {"script_unclosed_quote", test_script_unclosed_quote},
+      {"script_json_escape", test_script_json_escape},
+      {"script_validate_offsets", test_script_validate_offsets},
+      {"script_toc_in_body", test_script_toc_in_body},
+      {"script_toc_skip_synthetic", test_script_toc_skip_synthetic},
+      {"script_heading_title", test_script_heading_title},
+      {"script_chapter_order", test_script_chapter_order},
   };
 
   for (const TestCase& test : tests) {

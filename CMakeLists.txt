@@ -16,6 +16,8 @@ add_library(novel_core STATIC
   src/core/ChapterParser.cpp
   src/core/ChapterOrder.cpp
   src/core/DirectoryEdit.cpp
+  src/core/Json.cpp
+  src/core/Script.cpp
 )
 target_include_directories(novel_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 

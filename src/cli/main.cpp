@@ -7,6 +7,7 @@
 
 #include "core/ChapterOrder.hpp"
 #include "core/ChapterParser.hpp"
+#include "core/Script.hpp"
 #include "core/TextFile.hpp"
 #include "core/TextUtf8.hpp"
 
@@ -29,7 +30,7 @@ constexpr int kExitArgs = 3;
 void print_usage() {
   std::fprintf(stderr,
                "用法：novellines-cli --input <file> [--out <file>] "
-               "[--json <file>] [--move from:to ...]\n"
+               "[--json <file>] [--script <file>] [--move from:to ...]\n"
                "                 [--title-lines] [--dry-run]\n"
                "无参数或参数错误时打印本帮助并返回 %d。\n",
                kExitArgs);
@@ -39,6 +40,7 @@ struct Options {
   std::string input;
   std::string json_path;
   std::string out_path;
+  std::string script_path;
   std::vector<std::pair<int, int>> moves;
   bool title_lines = false;
   bool dry_run = false;
@@ -78,6 +80,17 @@ bool write_text_file(const std::string& path, const std::string& content) {
   return static_cast<bool>(out);
 }
 
+void print_script_stats(const novel::ScriptDocument& document) {
+  std::size_t counts[4] = {0, 0, 0, 0};
+  for (const novel::ScriptSegment& segment : document.segments) {
+    const auto index = static_cast<std::size_t>(segment.type);
+    if (index < 4) ++counts[index];
+  }
+  std::printf("脚本片段: %zu（标题 %zu / 旁白 %zu / 对话 %zu / 心声 %zu）\n",
+              document.segments.size(), counts[0], counts[1], counts[2],
+              counts[3]);
+}
+
 bool parse_args(const std::vector<std::string>& args, Options& options,
                 std::string& error) {
   for (std::size_t i = 1; i < args.size(); ++i) {
@@ -96,6 +109,8 @@ bool parse_args(const std::vector<std::string>& args, Options& options,
       if (!need_value(options.json_path)) return false;
     } else if (arg == "--out") {
       if (!need_value(options.out_path)) return false;
+    } else if (arg == "--script") {
+      if (!need_value(options.script_path)) return false;
     } else if (arg == "--move") {
       std::string value;
       if (!need_value(value)) return false;
@@ -181,6 +196,20 @@ int run(const std::vector<std::string>& args) {
   const std::vector<novel::Chapter> ordered =
       novel::reorder_chapters(parsed.chapters, moves);
 
+  novel::ScriptDocument script;
+  std::vector<std::string> script_errors;
+  if (!options.script_path.empty() || options.dry_run) {
+    script = novel::build_script(loaded.text, ordered, parsed.toc_lines,
+                                 options.input, loaded.encoding);
+    script_errors = novel::validate_script(script, loaded.text);
+    if (!script_errors.empty() && !options.script_path.empty()) {
+      for (const std::string& error : script_errors) {
+        std::fprintf(stderr, "脚本校验失败: %s\n", error.c_str());
+      }
+      return kExitFile;
+    }
+  }
+
   if (options.dry_run) {
     std::printf("章节数: %d\n", chapter_count);
     std::printf("总行数: %zu\n",
@@ -191,6 +220,11 @@ int run(const std::vector<std::string>& args) {
       std::printf("%s%s", i == 0 ? "" : " > ", ordered[i].title.c_str());
     }
     std::printf("\n");
+    if (!script_errors.empty()) {
+      std::fprintf(stderr, "提示: 脚本校验有 %zu 项，dry-run 不据此失败\n",
+                   script_errors.size());
+    }
+    print_script_stats(script);
     return kExitOk;
   }
 
@@ -222,6 +256,16 @@ int run(const std::vector<std::string>& args) {
       return kExitFile;
     }
     std::fprintf(stderr, "已写入 TXT: %s\n", options.out_path.c_str());
+  }
+
+  if (!options.script_path.empty()) {
+    const std::string script_json = novel::script_json(script);
+    if (!write_text_file(options.script_path, script_json)) {
+      print_error("无法写入脚本 JSON：" + options.script_path);
+      return kExitFile;
+    }
+    std::fprintf(stderr, "已写入脚本: %s\n", options.script_path.c_str());
+    print_script_stats(script);
   }
 
   return kExitOk;

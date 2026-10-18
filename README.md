@@ -94,6 +94,7 @@ build\Release\novellines-gui.exe --input book.txt
 novellines-cli --input book.txt
 novellines-cli --input book.txt --move 271:1 --out book_reordered.txt
 novellines-cli --input book.txt --move 271:1 --out book_reordered.txt --json toc.json
+novellines-cli --input book.txt --script script.json
 novellines-cli --input book.txt --title-lines
 ```
 
@@ -102,11 +103,20 @@ novellines-cli --input book.txt --title-lines
 | `--input <file>` | 输入 TXT，必填 |
 | `--out <file>` | 重排后另存 TXT |
 | `--json <file>` | 导出目录 JSON |
+| `--script <file>` | 导出有声书脚本 JSON |
 | `--move from:to` | 1 基位置，可重复，按序应用 |
 | `--title-lines` | 识别无编号短标题（默认关闭） |
 | `--dry-run` | 只解析并打印统计 |
 
 无参数或参数错误时打印用法并返回 3。
+
+### 脚本 JSON
+
+`--script` 输出 `novelsort/script/1`。
+片段类型为 `heading`、`narration`、`dialogue`、`thought`。
+保留解码、统一换行后的 UTF-8 字节偏移。
+`speaker_hint` 只是归属候选，不是最终说话人。
+格式见 [有声书脚本数据层](docs/有声书脚本数据层.md)。
 
 ## 识别规则
 
