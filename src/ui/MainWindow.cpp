@@ -73,6 +73,7 @@
 #include "core/DirectoryEdit.hpp"
 #include "core/TextFile.hpp"
 #include "ui/ChapterTableView.hpp"
+#include "ui/AppIdentity.hpp"
 #include "ui/ChapterDialogs.hpp"
 #include "ui/CheckBoxStyle.hpp"
 #include "ui/PreviewEdit.hpp"
@@ -373,12 +374,12 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent) {
   // Windows 10 原生标题栏不跟随应用亮色主题，改用自绘标题栏。
   setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
   buildUi();
-  setWindowTitle(QStringLiteral("novel-lines · TXT 章节识别与重排"));
+  setWindowTitle(kWindowTitle);
   resize(metrics::kWindowWidth, metrics::kWindowHeight);
   setMinimumSize(metrics::kMinWindowWidth, metrics::kMinWindowHeight);
 
   // 启动时按 QSettings 持久化的主题（默认暗色）应用一次。
-  QSettings settings(QStringLiteral("novel-lines"), QStringLiteral("novel-lines"));
+  QSettings settings = makeSettings();
   const QString saved = settings.value(QStringLiteral("theme"), QStringLiteral("dark")).toString();
   themeDark_ = (saved != QStringLiteral("light"));
   applyThemeToWindow(themeDark_);
@@ -412,7 +413,7 @@ void MainWindow::buildUi() {
   titleLayout->setContentsMargins(12, 0, 0, 0);
   titleLayout->setSpacing(0);
   QLabel* windowTitle =
-      new QLabel(QStringLiteral("novel-lines · TXT 章节识别与重排"), titleBar);
+      new QLabel(kWindowTitle, titleBar);
   windowTitle->setObjectName(QStringLiteral("windowTitle"));
   windowTitle->setAttribute(Qt::WA_TransparentForMouseEvents);
   titleLayout->addWidget(windowTitle);
@@ -555,7 +556,7 @@ void MainWindow::buildUi() {
   exportToExecDir_ = new QCheckBox(this);
   exportToExecDir_->hide();
   {
-    QSettings settings(QStringLiteral("novel-lines"), QStringLiteral("novel-lines"));
+    QSettings settings = makeSettings();
     exportToExecDir_->setChecked(
         settings.value(QStringLiteral("exportToExecDir"), true).toBool());
   }
@@ -932,7 +933,7 @@ void MainWindow::applyThemeToWindow(bool dark) {
 void MainWindow::toggleTheme() {
   const bool next = !themeDark_;
   applyThemeToWindow(next);
-  QSettings settings(QStringLiteral("novel-lines"), QStringLiteral("novel-lines"));
+  QSettings settings = makeSettings();
   settings.setValue(QStringLiteral("theme"), next ? QStringLiteral("dark")
                                                   : QStringLiteral("light"));
 }
@@ -2487,7 +2488,7 @@ bool MainWindow::exportContent(bool json) {
   }
 
   if (!json) {
-    QSettings settings(QStringLiteral("novel-lines"), QStringLiteral("novel-lines"));
+    QSettings settings = makeSettings();
     settings.setValue(QStringLiteral("exportToExecDir"),
                      exportToExecDir_->isChecked());
   }

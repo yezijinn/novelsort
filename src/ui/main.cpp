@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 
+#include "ui/AppIdentity.hpp"
 #include "ui/MainWindow.hpp"
 #include "ui/Selftest.hpp"
 #include "core/TextUtf8.hpp"
@@ -89,8 +90,8 @@ int main(int argc, char** argv) {
   }
 
   QApplication app(argc, argv);
-  QApplication::setApplicationName(QStringLiteral("novel-lines"));
-  QApplication::setOrganizationName(QStringLiteral("novel-lines"));
+  QApplication::setApplicationName(QString::fromLatin1(ui::kAppName));
+  QApplication::setOrganizationName(QString::fromLatin1(ui::kOrgName));
 
   QCommandLineParser parser;
   parser.setApplicationDescription(QStringLiteral("TXT 章节识别与重排（桌面版）"));
@@ -105,7 +106,7 @@ int main(int argc, char** argv) {
   parser.process(app);
 
   // 启动时按 QSettings 持久化的主题（默认暗色）应用一次。
-  QSettings settings(QStringLiteral("novel-lines"), QStringLiteral("novel-lines"));
+  QSettings settings = ui::makeSettings();
   const QString savedTheme =
       settings.value(QStringLiteral("theme"), QStringLiteral("dark")).toString();
   const bool dark = (savedTheme != QStringLiteral("light"));
