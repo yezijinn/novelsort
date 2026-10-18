@@ -49,7 +49,7 @@ build\Release\novellines-gui.exe --input book.txt --page dialogue
 ### 子页面
 
 - 章节整理：原章节识别、重排与目录导出。
-- 台词拆分：打开 TXT，切分旁白/对白/心声，表格审阅，导出脚本 JSON。
+- 台词拆分：打开 TXT，按章列出章节；点章查看该章片段与详情，导出脚本 JSON。
 
 启动时加 `--page dialogue` 可直接打开台词拆分页。
 

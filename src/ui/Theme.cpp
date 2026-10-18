@@ -188,6 +188,21 @@ QListWidget#navList::item:selected {
   background-color: %{accentBg}; color: %{accent}; font-weight: bold;
 }
 QListWidget#navList::item:selected:!active { background-color: %{accentBg}; color: %{accent}; }
+
+/* ===== 台词拆分页：章节列表（独立边距，不套用 navList） ===== */
+QListWidget#dialogueChapters {
+  background-color: %{panel}; border: 1px solid %{border}; border-radius: 10px;
+  padding: 6px; font-size: 10.5pt; outline: 0;
+}
+QListWidget#dialogueChapters::item {
+  background-color: transparent; color: %{text}; border: 1px solid transparent;
+  border-radius: 8px; padding: 8px 10px; margin: 2px 0;
+}
+QListWidget#dialogueChapters::item:hover { background-color: %{hover}; }
+QListWidget#dialogueChapters::item:selected {
+  background-color: %{accentBg}; color: %{accent}; border: 1px solid %{accent};
+  font-weight: bold;
+}
 QMenuBar {
   background-color: %{panel}; border-bottom: 1px solid %{border};
   color: %{text}; font-size: 10.5pt; padding: 2px;
