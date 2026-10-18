@@ -43,9 +43,17 @@ cmake --build build --config Release --target deploy-gui
 ```powershell
 build\Release\novellines-gui.exe
 build\Release\novellines-gui.exe --input book.txt
+build\Release\novellines-gui.exe --input book.txt --page dialogue
 ```
 
-### 布局
+### 子页面
+
+- 章节整理：原章节识别、重排与目录导出。
+- 台词拆分：打开 TXT，切分旁白/对白/心声，表格审阅，导出脚本 JSON。
+
+启动时加 `--page dialogue` 可直接打开台词拆分页。
+
+### 布局（章节整理页）
 
 | 区域 | 说明 |
 |---|---|

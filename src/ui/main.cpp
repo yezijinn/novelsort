@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "ui/AppIdentity.hpp"
+#include "ui/AppShell.hpp"
 #include "ui/MainWindow.hpp"
 #include "ui/Selftest.hpp"
 #include "core/TextUtf8.hpp"
@@ -94,15 +95,21 @@ int main(int argc, char** argv) {
   QApplication::setOrganizationName(QString::fromLatin1(ui::kOrgName));
 
   QCommandLineParser parser;
-  parser.setApplicationDescription(QStringLiteral("TXT 章节识别与重排（桌面版）"));
+  parser.setApplicationDescription(
+      QStringLiteral("小说整理与有声书脚本（桌面版）"));
   QCommandLineOption inputOpt(QStringLiteral("input"),
                               QStringLiteral("启动时加载的 TXT 文件"),
                               QStringLiteral("file"));
   QCommandLineOption selftestOpt(QStringLiteral("selftest"),
                                   QStringLiteral("无窗口自检：加载 --input 文件，依次执行编辑操作并导出到 %TEMP%"),
                                   QStringLiteral("outdir"));
+  QCommandLineOption pageOpt(
+      QStringLiteral("page"),
+      QStringLiteral("启动页：chapter（默认）或 dialogue"),
+      QStringLiteral("name"), QStringLiteral("chapter"));
   parser.addOption(inputOpt);
   parser.addOption(selftestOpt);
+  parser.addOption(pageOpt);
   parser.process(app);
 
   // 启动时按 QSettings 持久化的主题（默认暗色）应用一次。
@@ -127,7 +134,7 @@ int main(int argc, char** argv) {
     return failures == 0 ? 0 : 1;
   }
 
-  ui::MainWindow window;
+  ui::AppShell window;
   // 居中必须在 resize 之后：构造时拿到的还是默认尺寸。
   window.show();
   window.move(QApplication::desktop()->availableGeometry(&window).center() -
@@ -139,13 +146,21 @@ int main(int argc, char** argv) {
   ui::applyWindowsFrame(window.winId(), dark);
 #endif
 
-  const bool recovered = window.tryRecoverBackup();
+  const bool dialoguePage =
+      parser.value(pageOpt) == QStringLiteral("dialogue");
+  const bool recovered = dialoguePage ? false : window.tryRecoverBackup();
   const QString input = parser.value(inputOpt);
-  if (!input.isEmpty() && !recovered) {
-    QApplication::setOverrideCursor(Qt::WaitCursor);
-    QApplication::processEvents();
-    window.loadFile(novel::path_from_utf8(input.toStdString()), /*silent=*/false);
-    QApplication::restoreOverrideCursor();
+  if (!input.isEmpty() && (dialoguePage || !recovered)) {
+    const std::filesystem::path path =
+        novel::path_from_utf8(input.toStdString());
+    if (dialoguePage) {
+      window.openDialogue(path);
+    } else {
+      QApplication::setOverrideCursor(Qt::WaitCursor);
+      QApplication::processEvents();
+      window.loadFile(path);
+      QApplication::restoreOverrideCursor();
+    }
   }
 
   return app.exec();

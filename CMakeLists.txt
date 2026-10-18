@@ -35,6 +35,8 @@ if(Qt5_FOUND)
 
   add_executable(novellines-gui WIN32
     src/ui/main.cpp
+    src/ui/AppShell.cpp
+    src/ui/DialoguePage.cpp
     src/ui/MainWindow.cpp
     src/ui/ChapterDialogs.cpp
     src/ui/ChapterModel.cpp

@@ -66,6 +66,15 @@ class MainWindow : public QMainWindow {
   void toggleTheme();
   void applyThemeToWindow(bool dark);
 
+  // 嵌入外壳：改窗口标志为子控件、隐藏自绘标题栏与缩放手柄、主题按钮。
+  void prepareEmbedded();
+
+  // 当前是否为暗色主题（外壳主题按钮需要读取）。
+  bool isDarkTheme() const { return themeDark_; }
+
+  // 外壳转发关闭事件：复用未导出确认逻辑；event->ignore() 时外壳不关闭。
+  void forwardCloseEvent(QCloseEvent* event);
+
  protected:
   void showEvent(QShowEvent* event) override;
   void changeEvent(QEvent* event) override;
@@ -207,6 +216,7 @@ class MainWindow : public QMainWindow {
   QPushButton* themeBtn_ = nullptr;  // 主题切换按钮（固定文案「明暗主题」）
   QPushButton* titleMax_ = nullptr;  // 自绘标题栏最大化/还原
   QSizeGrip* sizeGrip_ = nullptr;    // 无边框窗口右下角缩放
+  bool embedded_ = false;            // 是否已被外壳嵌入（隐藏自绘标题栏/手柄/主题按钮）
   QTimer* recoveryTimer_ = nullptr;  // 自动备份节流定时器
   bool recoveryEnabled_ = true;
   bool recovering_ = false;

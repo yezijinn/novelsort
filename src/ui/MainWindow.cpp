@@ -898,15 +898,29 @@ void MainWindow::resizeEvent(QResizeEvent* event) {
   }
 }
 
+void MainWindow::prepareEmbedded() {
+  embedded_ = true;
+  // 嵌入外壳：作为子控件而非独立窗口，不再需要自绘标题栏/缩放手柄/主题按钮。
+  setWindowFlags(Qt::Widget);
+  if (auto* bar = findChild<QFrame*>(QStringLiteral("customTitleBar"))) {
+    bar->hide();
+  }
+  if (sizeGrip_) sizeGrip_->hide();
+  if (themeBtn_) themeBtn_->hide();
+}
+
 void MainWindow::applyThemeToWindow(bool dark) {
   themeDark_ = dark;
   ui::applyTheme(*qApp, dark);
   // 顶栏按钮固定文案「明暗主题」，点击在明/暗之间切换。
+  // 嵌入状态下窗口由外壳统一管理外观，不要对自己的子窗口调用 applyWindowsFrame。
 #ifdef _WIN32
-  ui::applyWindowsFrame(winId(), dark);
-  SetWindowPos(reinterpret_cast<HWND>(winId()), nullptr, 0, 0, 0, 0,
-               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
-                   SWP_FRAMECHANGED);
+  if (!embedded_) {
+    ui::applyWindowsFrame(winId(), dark);
+    SetWindowPos(reinterpret_cast<HWND>(winId()), nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                     SWP_FRAMECHANGED);
+  }
 #endif
   // 刷新 delegate（viewport update）+ 重置预览缓存并重绘当前章。
   tableView_->viewport()->update();
@@ -2760,6 +2774,10 @@ void MainWindow::dropEvent(QDropEvent* event) {
   ScopedWaitCursor wait;
   loadFile(novel::path_from_utf8(path.toStdString()));
   event->acceptProposedAction();
+}
+
+void MainWindow::forwardCloseEvent(QCloseEvent* event) {
+  closeEvent(event);
 }
 
 void MainWindow::closeEvent(QCloseEvent* event) {

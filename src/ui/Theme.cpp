@@ -170,6 +170,31 @@ QPushButton#titleButton[role="close"]:hover {
 }
 QFrame#topBar { background-color: %{panel}; border-bottom: 1px solid %{border}; }
 QFrame#exportBar { background-color: %{panel}; border-bottom: 1px solid %{border}; }
+
+/* ===== 外壳侧栏 ===== */
+QFrame#appSidebar { background-color: %{bg}; border-right: 1px solid %{border}; }
+QLabel#appName { font-size: 16pt; font-weight: bold; color: %{text}; background: transparent; }
+QLabel#appHint { font-size: 10.5pt; color: %{sub}; background: transparent; }
+QListWidget#navList {
+  background-color: %{bg}; border: none; border-radius: 10px;
+  padding: 4px; font-size: 11pt; outline: 0;
+}
+QListWidget#navList::item {
+  background-color: transparent; color: %{text}; border-radius: 8px;
+  padding: 9px 12px; margin: 2px 0;
+}
+QListWidget#navList::item:hover { background-color: %{hover}; }
+QListWidget#navList::item:selected {
+  background-color: %{accentBg}; color: %{accent}; font-weight: bold;
+}
+QListWidget#navList::item:selected:!active { background-color: %{accentBg}; color: %{accent}; }
+QMenuBar {
+  background-color: %{panel}; border-bottom: 1px solid %{border};
+  color: %{text}; font-size: 10.5pt; padding: 2px;
+}
+QMenuBar::item { background: transparent; padding: 5px 12px; border-radius: 6px; }
+QMenuBar::item:selected { background-color: %{hover}; }
+QMenuBar::item:pressed { background-color: %{border}; }
 QLabel#logo {
   background-color: %{accentBg}; color: %{accent}; border: 1px solid %{accent};
   border-radius: 8px; font-weight: bold; font-size: 13pt;
@@ -224,6 +249,12 @@ QTableView {
 }
 QTableView::item { border: none; padding: 0; }
 QTableView::item:selected { background: transparent; }
+QTableView#dialogueTable::item:selected {
+  background-color: %{accentBg}; color: %{text};
+}
+QTableView#dialogueTable::item:hover {
+  background-color: %{hover};
+}
 QHeaderView { background: transparent; }
 QHeaderView::section { background: transparent; border: none; }
 QTableView:focus { border: 1px solid %{accent}; }
