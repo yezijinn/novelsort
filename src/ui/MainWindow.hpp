@@ -125,6 +125,13 @@ class MainWindow : public QMainWindow {
   // 导出实现：json=false 写 TXT（遵循「导出到程序位置」勾选），true 写目录 JSON。
   // 成功后更新 lastExportedPath_ 并启用「打开导出位置」。
   bool exportContent(bool json);
+  // 解析导出目标路径；为空表示用户取消。
+  QString resolveExportPath(bool json);
+  // 目标已存在时询问处理方式；返回 false 表示取消。
+  // 选「另存为」时把新路径写入 exportSaveAsPath_。
+  bool confirmExportOverwrite(const QString& path);
+  // 原子写入；失败时旧文件保持原样。
+  bool writeExportFile(const QString& path, const std::string& content);
 
   // 预览区光标所在位置映射到源行号。
   int previewCursorToSource(QTextCursor cursor) const;
@@ -212,6 +219,8 @@ class MainWindow : public QMainWindow {
   // 导出相关：记忆「导出到程序位置」勾选；记录最近一次导出路径用于「打开位置」
   QCheckBox* exportToExecDir_ = nullptr;  // 状态存储（界面用按钮显示）
   QString lastExportedPath_;             // 最近一次成功导出的完整路径
+  QString s_exportMruDir;                // 保存框最近使用的目录
+  QString exportSaveAsPath_;             // 「另存为」选中的新路径
 
   // 加载内容
   std::string loadedText_;             // UTF-8，LF

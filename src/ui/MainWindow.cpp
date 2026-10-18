@@ -2388,66 +2388,20 @@ void MainWindow::onSplitHere() {
 bool MainWindow::exportContent(bool json) {
   if (!isLoaded_) return false;
 
-  const QString sourcePath = QString::fromStdString(novel::path_to_utf8(currentFile_));
-  const QFileInfo fi(sourcePath);
-  const QString base = fi.completeBaseName().isEmpty()
- ? QStringLiteral("book")
-                           : fi.completeBaseName();
-  const QString suffix = json ? QStringLiteral(".json") : QStringLiteral(".txt");
-  const QString filter = json ? QStringLiteral("JSON 文件 (*.json)")
-                              : QStringLiteral("文本文件 (*.txt)");
-
-  const bool toExec = !json && exportToExecDir_ && exportToExecDir_->isChecked();
-  static QString s_mruDir;
-  QString dir = fi.absolutePath();
-  if (!s_mruDir.isEmpty()) {
-    dir = QFileInfo(s_mruDir).absolutePath();
-  } else if (dir.isEmpty() || dir == QStringLiteral(".")) {
-    dir = QDir::homePath();
-  }
-  const QString suggested = dir + QDir::separator() + base +
-                           QStringLiteral("_reordered") + suffix;
-
-  QString path;
-  if (toExec) {
-    path = QCoreApplication::applicationDirPath() + QDir::separator() + base +
-           QStringLiteral("_reordered") + suffix;
-  } else {
-    path = QFileDialog::getSaveFileName(
-        this, json ? QStringLiteral("导出目录 JSON") : QStringLiteral("导出 TXT"),
-        suggested, filter);
-    if (!path.isEmpty()) s_mruDir = path;
-  }
+  const QString path = resolveExportPath(json);
   if (path.isEmpty()) return false;
 
   // 导出到程序位置且目标已存在：覆盖 / 另存为 / 取消。
-  if (toExec && QFile::exists(path)) {
-    QMessageBox box(this);
-    box.setIcon(QMessageBox::Question);
-    box.setWindowTitle(QStringLiteral("文件已存在"));
-    box.setText(QStringLiteral("程序位置已存在：\n") + path +
-                QStringLiteral("\n\n请选择处理方式。"));
-    QPushButton* overwrite = box.addButton(QStringLiteral("覆盖"),
-                                           QMessageBox::DestructiveRole);
-    QPushButton* saveAs = box.addButton(QStringLiteral("另存为"),
-                                        QMessageBox::ActionRole);
-    QPushButton* cancel = box.addButton(QStringLiteral("取消"),
-                                        QMessageBox::RejectRole);
-    box.setDefaultButton(cancel);
-    box.setEscapeButton(cancel);
-    box.exec();
-    const QAbstractButton* clicked = box.clickedButton();
-    if (clicked == cancel || clicked == nullptr) return false;
-    if (clicked == saveAs) {
-      const QString alt = QFileDialog::getSaveFileName(
-          this, QStringLiteral("另存为"), path, filter);
-      if (alt.isEmpty()) return false;
-      path = alt;
-    }
-    (void)overwrite;
+  const bool toExec = !json && exportToExecDir_ && exportToExecDir_->isChecked();
+  exportSaveAsPath_.clear();
+  if (toExec && QFile::exists(path) && !confirmExportOverwrite(path)) {
+    return false;
   }
+  // 「另存为」会把最终目标换成用户选定的路径。
+  const QString target =
+      exportSaveAsPath_.isEmpty() ? path : exportSaveAsPath_;
 
-  statusLabel_->setText(QStringLiteral("正在导出：") + path);
+  statusLabel_->setText(QStringLiteral("正在导出：") + target);
   QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
   ScopedWaitCursor wait;
 
@@ -2458,11 +2412,92 @@ bool MainWindow::exportContent(bool json) {
                                            &chapterModel_->chapters(),
                                            &tocLines_, &warnings_})
            : novel::render_txt(loadedText_, chapterModel_->chapters(),
-                              tocLines_, excludedRanges_, textExclusions_);
+                               tocLines_, excludedRanges_, textExclusions_);
 
+  if (!writeExportFile(target, content)) return false;
+
+  if (!json) {
+    QSettings settings = makeSettings();
+    settings.setValue(QStringLiteral("exportToExecDir"),
+                     exportToExecDir_->isChecked());
+  }
+
+  lastExportedPath_ = target;
+  if (btns_->openExportLoc) btns_->openExportLoc->setEnabled(true);
+  setDirty(false);
+  statusLabel_->setText(QStringLiteral("已导出：") + target);
+  return true;
+}
+
+// 解析导出目标：默认写源文件同名 _reordered 文件；
+// 「导出到程序位置」开启时写 exe 同级目录，否则弹保存框。
+QString MainWindow::resolveExportPath(bool json) {
+  const QString sourcePath =
+      QString::fromStdString(novel::path_to_utf8(currentFile_));
+  const QFileInfo fi(sourcePath);
+  const QString base =
+      fi.completeBaseName().isEmpty() ? QStringLiteral("book")
+                                      : fi.completeBaseName();
+  const QString suffix = json ? QStringLiteral(".json") : QStringLiteral(".txt");
+  const QString filter = json ? QStringLiteral("JSON 文件 (*.json)")
+                              : QStringLiteral("文本文件 (*.txt)");
+
+  if (!json && exportToExecDir_ && exportToExecDir_->isChecked()) {
+    return QCoreApplication::applicationDirPath() + QDir::separator() + base +
+           QStringLiteral("_reordered") + suffix;
+  }
+
+  // 最近导出目录优先于源文件目录；都不可用才退到家目录。
+  QString dir = s_exportMruDir.isEmpty()
+                    ? fi.absolutePath()
+                    : QFileInfo(s_exportMruDir).absolutePath();
+  if (dir.isEmpty() || dir == QStringLiteral(".")) dir = QDir::homePath();
+  const QString suggested = dir + QDir::separator() + base +
+                            QStringLiteral("_reordered") + suffix;
+
+  const QString path = QFileDialog::getSaveFileName(
+      this, json ? QStringLiteral("导出目录 JSON") : QStringLiteral("导出 TXT"),
+      suggested, filter);
+  if (!path.isEmpty()) s_exportMruDir = path;
+  return path;
+}
+
+// 目标已存在时询问处理方式；返回 false 表示取消导出。
+bool MainWindow::confirmExportOverwrite(const QString& path) {
+  QMessageBox box(this);
+  box.setIcon(QMessageBox::Question);
+  box.setWindowTitle(QStringLiteral("文件已存在"));
+  box.setText(QStringLiteral("程序位置已存在：\n") + path +
+              QStringLiteral("\n\n请选择处理方式。"));
+  QPushButton* overwrite = box.addButton(QStringLiteral("覆盖"),
+                                         QMessageBox::DestructiveRole);
+  QPushButton* saveAs =
+      box.addButton(QStringLiteral("另存为"), QMessageBox::ActionRole);
+  QPushButton* cancel =
+      box.addButton(QStringLiteral("取消"), QMessageBox::RejectRole);
+  box.setDefaultButton(cancel);
+  box.setEscapeButton(cancel);
+  box.exec();
+
+  const QAbstractButton* clicked = box.clickedButton();
+  if (clicked == cancel || clicked == nullptr) return false;
+  if (clicked == saveAs) {
+    // 另存为：换成用户选定的路径，交回调用方写入。
+    const QString alt = QFileDialog::getSaveFileName(
+        this, QStringLiteral("另存为"), path,
+        QStringLiteral("文本文件 (*.txt);;JSON 文件 (*.json);;所有文件 (*.*)"));
+    if (alt.isEmpty()) return false;
+    exportSaveAsPath_ = alt;
+  }
+  (void)overwrite;
+  return true;
+}
+
+// 原子写入：失败时旧文件保持原样。
+bool MainWindow::writeExportFile(const QString& path,
+                                 const std::string& content) {
   QSaveFile out(path);
   if (!out.open(QIODevice::WriteOnly)) {
-    wait.restore();
     show_warning_message(this, QStringLiteral("导出失败"),
                          QStringLiteral("无法写入文件：\n") + path + "\n" +
                              out.errorString());
@@ -2472,29 +2507,16 @@ bool MainWindow::exportContent(bool json) {
       out.write(content.data(), static_cast<qint64>(content.size()));
   if (written != static_cast<qint64>(content.size())) {
     out.cancelWriting();
-    wait.restore();
     show_warning_message(this, QStringLiteral("导出失败"),
                          QStringLiteral("写入不完整：\n") + path);
     return false;
   }
   if (!out.commit()) {
-    wait.restore();
     show_warning_message(this, QStringLiteral("导出失败"),
                          QStringLiteral("无法完成写入：\n") + path + "\n" +
                              out.errorString());
     return false;
   }
-
-  if (!json) {
-    QSettings settings = makeSettings();
-    settings.setValue(QStringLiteral("exportToExecDir"),
-                     exportToExecDir_->isChecked());
-  }
-
-  lastExportedPath_ = path;
-  if (btns_->openExportLoc) btns_->openExportLoc->setEnabled(true);
-  setDirty(false);
-  statusLabel_->setText(QStringLiteral("已导出：") + path);
   return true;
 }
 
