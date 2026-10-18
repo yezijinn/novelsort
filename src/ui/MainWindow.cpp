@@ -2394,7 +2394,9 @@ bool MainWindow::exportContent(bool json) {
   // 导出到程序位置且目标已存在：覆盖 / 另存为 / 取消。
   const bool toExec = !json && exportToExecDir_ && exportToExecDir_->isChecked();
   exportSaveAsPath_.clear();
-  if (toExec && QFile::exists(path) && !confirmExportOverwrite(path)) {
+  // toExec 只对 TXT 成立，另存为仍用 TXT 过滤器。
+  if (toExec && QFile::exists(path) &&
+      !confirmExportOverwrite(path, QStringLiteral("文本文件 (*.txt)"))) {
     return false;
   }
   // 「另存为」会把最终目标换成用户选定的路径。
@@ -2403,18 +2405,24 @@ bool MainWindow::exportContent(bool json) {
 
   statusLabel_->setText(QStringLiteral("正在导出：") + target);
   QApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-  ScopedWaitCursor wait;
-
-  const std::string content =
-      json ? novel::directory_json(
-                 novel::DirectoryJsonInput{novel::path_to_utf8(currentFile_),
-                                           loadedEncoding_,
-                                           &chapterModel_->chapters(),
-                                           &tocLines_, &warnings_})
-           : novel::render_txt(loadedText_, chapterModel_->chapters(),
-                               tocLines_, excludedRanges_, textExclusions_);
-
-  if (!writeExportFile(target, content)) return false;
+  bool written = false;
+  QString writeError;
+  {
+    ScopedWaitCursor wait;
+    const std::string content =
+        json ? novel::directory_json(
+                   novel::DirectoryJsonInput{novel::path_to_utf8(currentFile_),
+                                             loadedEncoding_,
+                                             &chapterModel_->chapters(),
+                                             &tocLines_, &warnings_})
+             : novel::render_txt(loadedText_, chapterModel_->chapters(),
+                                 tocLines_, excludedRanges_, textExclusions_);
+    written = writeExportFile(target, content, writeError);
+  }
+  if (!written) {
+    show_warning_message(this, QStringLiteral("导出失败"), writeError);
+    return false;
+  }
 
   if (!json) {
     QSettings settings = makeSettings();
@@ -2448,9 +2456,9 @@ QString MainWindow::resolveExportPath(bool json) {
   }
 
   // 最近导出目录优先于源文件目录；都不可用才退到家目录。
-  QString dir = s_exportMruDir.isEmpty()
+  QString dir = exportMruDir_.isEmpty()
                     ? fi.absolutePath()
-                    : QFileInfo(s_exportMruDir).absolutePath();
+                    : QFileInfo(exportMruDir_).absolutePath();
   if (dir.isEmpty() || dir == QStringLiteral(".")) dir = QDir::homePath();
   const QString suggested = dir + QDir::separator() + base +
                             QStringLiteral("_reordered") + suffix;
@@ -2458,12 +2466,14 @@ QString MainWindow::resolveExportPath(bool json) {
   const QString path = QFileDialog::getSaveFileName(
       this, json ? QStringLiteral("导出目录 JSON") : QStringLiteral("导出 TXT"),
       suggested, filter);
-  if (!path.isEmpty()) s_exportMruDir = path;
+  if (!path.isEmpty()) exportMruDir_ = path;
   return path;
 }
 
-// 目标已存在时询问处理方式；返回 false 表示取消导出。
-bool MainWindow::confirmExportOverwrite(const QString& path) {
+// 目标已存在时询问处理方式；filter 用于「另存为」文件对话框。
+// 返回 false 表示取消导出。
+bool MainWindow::confirmExportOverwrite(const QString& path,
+                                        const QString& filter) {
   QMessageBox box(this);
   box.setIcon(QMessageBox::Question);
   box.setWindowTitle(QStringLiteral("文件已存在"));
@@ -2484,8 +2494,7 @@ bool MainWindow::confirmExportOverwrite(const QString& path) {
   if (clicked == saveAs) {
     // 另存为：换成用户选定的路径，交回调用方写入。
     const QString alt = QFileDialog::getSaveFileName(
-        this, QStringLiteral("另存为"), path,
-        QStringLiteral("文本文件 (*.txt);;JSON 文件 (*.json);;所有文件 (*.*)"));
+        this, QStringLiteral("另存为"), path, filter);
     if (alt.isEmpty()) return false;
     exportSaveAsPath_ = alt;
   }
@@ -2493,28 +2502,27 @@ bool MainWindow::confirmExportOverwrite(const QString& path) {
   return true;
 }
 
-// 原子写入：失败时旧文件保持原样。
+// 原子写入：失败时旧文件保持原样，错误信息交给调用方弹框。
 bool MainWindow::writeExportFile(const QString& path,
-                                 const std::string& content) {
+                                 const std::string& content,
+                                 QString& error) {
+  error.clear();
   QSaveFile out(path);
   if (!out.open(QIODevice::WriteOnly)) {
-    show_warning_message(this, QStringLiteral("导出失败"),
-                         QStringLiteral("无法写入文件：\n") + path + "\n" +
-                             out.errorString());
+    error = QStringLiteral("无法写入文件：\n") + path + "\n" +
+            out.errorString();
     return false;
   }
   const qint64 written =
       out.write(content.data(), static_cast<qint64>(content.size()));
   if (written != static_cast<qint64>(content.size())) {
     out.cancelWriting();
-    show_warning_message(this, QStringLiteral("导出失败"),
-                         QStringLiteral("写入不完整：\n") + path);
+    error = QStringLiteral("写入不完整：\n") + path;
     return false;
   }
   if (!out.commit()) {
-    show_warning_message(this, QStringLiteral("导出失败"),
-                         QStringLiteral("无法完成写入：\n") + path + "\n" +
-                             out.errorString());
+    error = QStringLiteral("无法完成写入：\n") + path + "\n" +
+            out.errorString();
     return false;
   }
   return true;
